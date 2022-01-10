@@ -33,28 +33,12 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 TOPDIR=$(pwd)
-MACHINE = ${MACHINE}
 
-cp $TOPDIR/owrt-qti-conf/${MACHINE}/feeds.conf $TOPDIR
-
-########## devicetree symlinks changes START ########
-
-unlink $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor
-mkdir $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor
-cp -r $TOPDIR/src/vendor/qcom/proprietary/devicetree/* $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/
-
-unlink $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/qcom/display
-cp -r $TOPDIR/src/vendor/qcom/proprietary/display-devicetree/display $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/qcom/
-
-unlink $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom
-mkdir $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom
-cp -r $TOPDIR/src/vendor/qcom/proprietary/display-devicetree/bindings/* $TOPDIR/src/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom/
-
-########## devicetree symlinks changes END ########
+cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 cd $TOPDIR
 umask 022
 ./scripts/feeds update -a
 ./scripts/feeds install -a
-cp owrt-qti-conf/${MACHINE}/sdx65_open.config .config
+cp owrt-qti-conf/${TARGET_MACHINE}/sdx65_open.config .config
 make defconfig
