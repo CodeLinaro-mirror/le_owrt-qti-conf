@@ -8,7 +8,7 @@ QTIBSP:=adbd core-include ext4_utils fs_mgr libbase libcutils liblog libmincrypt
 
 QTIBSPPROP:=common
 
-COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server
+COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server time-services thermal-engine
 
 QTISSMGR:=initmss
 
@@ -16,7 +16,7 @@ define Profile/SDX65_Open
 	NAME:=Qualcomm Technologies, Inc SDX65 Open Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) \
+		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) \
 		-lacpd libtirpc -swconfig
 endef
 
