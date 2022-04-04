@@ -36,6 +36,21 @@ TOPDIR=$(pwd)
 
 cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
+########## devicetree symlinks changes START ########
+
+unlink $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor
+mkdir $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor
+cp -r $TOPDIR/src/vendor/qcom/proprietary/devicetree/* $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/
+
+unlink $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/qcom/display
+cp -r $TOPDIR/src/vendor/qcom/proprietary/display-devicetree/display $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/qcom/
+
+unlink $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom
+mkdir $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom
+cp -r $TOPDIR/src/vendor/qcom/proprietary/display-devicetree/bindings/* $TOPDIR/src/kernel/msm-5.4/arch/arm/boot/dts/vendor/bindings/display/qcom/
+
+########## devicetree symlinks changes END ########
+
 cd $TOPDIR
 umask 022
 ./scripts/feeds update -a
