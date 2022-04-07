@@ -4,11 +4,11 @@ UTILS:=file luci-app-samba rng-tools profilerd
 
 COREBSP_UTILS:=pm-utils
 
-QTIBSP:=adbd core-include ext4_utils fs_mgr libbase libcutils liblog libmincrypt mkbootimg libsparse logwrapper usb-composition
+QTIBSP:=adbd core-include ext4_utils fs_mgr libbase libcutils liblog libmincrypt mkbootimg libsparse logwrapper usb-composition libexecinfo
 
 QTIBSPPROP:=common
 
-COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server time-services thermal-engine
+COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server time-services
 
 QTISSMGR:=initmss
 
