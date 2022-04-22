@@ -10,13 +10,13 @@ QTIBSPPROP:=common sign_abl ipa_fws
 
 COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server time-services
 
-QTISSMGR:=initmss
+QTISSMGR:=initmss reboot-daemon
 
 define Profile/SDX65_Open
 	NAME:=Qualcomm Technologies, Inc SDX65 Open Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) \
+		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) $(QTISSMGR) \
 		-lacpd libtirpc -swconfig
 endef
 
