@@ -1,20 +1,16 @@
+include $(TOPDIR)/owrt-qti-bsp/qtibsp.mk
+include $(TOPDIR)/owrt-qti-bsp-prop/qtibspprop.mk
+include $(TOPDIR)/owrt-qti-core-prop/qticoreprop.mk
+include $(TOPDIR)/owrt-qti-ss-mgr/qtissmgr.mk
+include $(TOPDIR)/owrt-qti-ss-mgr-prop/qtissmgrprop.mk
+include $(TOPDIR)/owrt-qti-location/qtilocation.mk
+include $(TOPDIR)/owrt-qti-location-prop/qtilocationprop.mk
+
 OPENWRT_STANDARD:=luci openssl-util diag
 
 UTILS:=file luci-app-samba rng-tools profilerd tcpdump
 
 COREBSP_UTILS:=pm-utils
-
-QTIBSP:=adbd core-include ext4_utils fs_mgr libbase libcutils liblog libmincrypt mkbootimg libsparse logwrapper usb-composition edk2 libexecinfo
-
-QTIBSPPROP:=common sign_abl linux-msm-5.4_dt
-
-COREPROP:=diag diag-router qmi-framework rmt_storage tftp-server time-services
-
-QTISSMGR:=initmss reboot-daemon
-
-QTISSMGRPROP:=diag-reboot-app
-
-QTILOCATION:=gps-utils loc-core loc-hal loc-pla-hdr location-api-iface location-api-msg-proto location-client-api location-qapi
 
 QTIDATA:=rmnetctl kmod-rmnet-core libpugixml qps615
 
@@ -26,7 +22,8 @@ define Profile/SDX65_Olympic
 	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTIDATA) $(QTIDATAPROP) $(QTIDATAINTERNAL) \
+		$(QTIBSP) $(QTIBSPPROP) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTILOCATIONPROP) \
+		$(QTIDATA) $(QTIDATAPROP) $(QTIDATAINTERNAL) \
 		-lacpd libtirpc -swconfig
 endef
 
