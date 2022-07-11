@@ -22,17 +22,33 @@ QTIDATAPROP:=libqnicorn libqnicorn_internal qnicornd libnetmgr_rmnet_ext libqmi_
 
 QTIDATAINTERNAL:=aqr113-firmware kmod-aquantia
 
-define Profile/SDX65_Open
-	NAME:=Qualcomm Technologies, Inc SDX65 Open Profile
+define Profile/SDX65_Olympic
+	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
 		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTIDATA) $(QTIDATAPROP) $(QTIDATAINTERNAL) \
 		-lacpd libtirpc -swconfig
 endef
 
-define Profile/SDX65_Open/Description
-	sdx65 Open package set configuration.
-	Enables sdx65 open source packages
+define Profile/SDX65_Olympic/Description
+	Sdx65 Olympic package set configuration.
+	Enables sdx65 Olympic source packages
 endef
 
-$(eval $(call Profile,SDX65_Open))
+$(eval $(call Profile,SDX65_Olympic))
+
+define Profile/SDX75_Pinnacles
+	NAME:=Qualcomm Technologies, Inc SDX75 Pinnacles Profile
+	PACKAGES:=$(OPENWRT_STANDARD) \
+		$(COREBSP_UTILS) $(UTILS) \
+		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
+		ipa_fws -lacpd libtirpc -swconfig
+endef
+
+define Profile/SDX75_Pinnacles/Description
+	Sdx75 Pinnacles package set configuration.
+	Enables sdx75 Pinnacles source packages
+endef
+
+$(eval $(call Profile,SDX75_Pinnacles))
+

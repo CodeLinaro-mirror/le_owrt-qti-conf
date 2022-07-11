@@ -40,5 +40,5 @@ cd $TOPDIR
 umask 022
 ./scripts/feeds update -a
 ./scripts/feeds install -a
-cp owrt-qti-conf/${TARGET_MACHINE}/sdx65_open.config .config
+cp owrt-qti-conf/${TARGET_MACHINE}/${TARGET_MACHINE}_open.config .config
 make defconfig
