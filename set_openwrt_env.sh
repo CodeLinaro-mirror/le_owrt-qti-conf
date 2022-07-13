@@ -38,6 +38,41 @@ cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 cd $TOPDIR
 umask 022
+
+# build commands for Kuno
+function build-sdxbaagha-image(){
+    unset_owrt_env
+    export TARGET_VARIANT=sdxbaagha
+    export VARIANT=debug
+    make -j$(nproc) V=s
+}
+
+function build-sdxbaagha-perf-image(){
+    unset_owrt_env
+    export TARGET_VARIANT=sdxbaagha
+    export VARIANT=perf
+    make -j$(nproc) V=s
+}
+
+
+function build-sdxbaagha-128m-image(){
+    unset_owrt_env
+    export TARGET_VARIANT=sdxbaagha-128m
+    export VARIANT=debug
+    make -j$(nproc) V=s
+}
+
+function build-sdxbaagha-128m-perf-image(){
+    unset_owrt_env
+    export TARGET_VARIANT=sdxbaagha-128m
+    export VARIANT=perf
+    make -j$(nproc) V=s
+}
+
+function unset_owrt_env(){
+    unset TARGET_VARIANT VARIANT
+}
+
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 cp owrt-qti-conf/${TARGET_MACHINE}/${TARGET_MACHINE}_open.config .config
