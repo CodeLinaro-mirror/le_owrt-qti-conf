@@ -5,6 +5,7 @@ include $(TOPDIR)/owrt-qti-ss-mgr/qtissmgr.mk
 include $(TOPDIR)/owrt-qti-ss-mgr-prop/qtissmgrprop.mk
 include $(TOPDIR)/owrt-qti-location/qtilocation.mk
 include $(TOPDIR)/owrt-qti-location-prop/qtilocationprop.mk
+include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 
 OPENWRT_STANDARD:=luci openssl-util diag
 
