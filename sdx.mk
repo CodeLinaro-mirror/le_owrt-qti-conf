@@ -10,7 +10,7 @@ include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 
 OPENWRT_STANDARD:=luci openssl-util diag
 
-UTILS:=file luci-app-samba rng-tools profilerd tcpdump
+UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils
 
 COREBSP_UTILS:=pm-utils
 
