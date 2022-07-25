@@ -1,5 +1,6 @@
 include $(TOPDIR)/owrt-qti-bsp/qtibsp.mk
 include $(TOPDIR)/owrt-qti-bsp-prop/qtibspprop.mk
+include $(TOPDIR)/owrt-qti-core/qticore.mk
 include $(TOPDIR)/owrt-qti-core-prop/qticoreprop.mk
 include $(TOPDIR)/owrt-qti-ss-mgr/qtissmgr.mk
 include $(TOPDIR)/owrt-qti-ss-mgr-prop/qtissmgrprop.mk
@@ -23,7 +24,7 @@ define Profile/SDX65_Olympic
 	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTILOCATIONPROP) \
+		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTILOCATIONPROP) \
 		$(QTIDATA) $(QTIDATAPROP) $(QTIDATAINTERNAL) \
 		-lacpd libtirpc -swconfig
 endef
@@ -39,7 +40,7 @@ define Profile/SDX75_Pinnacles
 	NAME:=Qualcomm Technologies, Inc SDX75 Pinnacles Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(COREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
+		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
 		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
 endef
 
