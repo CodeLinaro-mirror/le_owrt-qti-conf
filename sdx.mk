@@ -63,6 +63,7 @@ define Profile/SDX35_Kuno
 		$(COREBSP_UTILS) $(UTILS) \
 		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
 		$(QTIDATA) $(QTIDATAPROP) \
+		$(QTILOCATION) $(QTILOCATIONPROP) $(QTILOCATIONINTERNAL) \
 		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
 endef
 
