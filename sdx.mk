@@ -6,6 +6,8 @@ include $(TOPDIR)/owrt-qti-ss-mgr/qtissmgr.mk
 include $(TOPDIR)/owrt-qti-ss-mgr-prop/qtissmgrprop.mk
 include $(TOPDIR)/owrt-qti-location/qtilocation.mk
 include $(TOPDIR)/owrt-qti-location-prop/qtilocationprop.mk
+include $(TOPDIR)/owrt-qti-data/qtidata.mk
+include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 
 OPENWRT_STANDARD:=luci openssl-util diag
@@ -14,18 +16,12 @@ UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack connt
 
 COREBSP_UTILS:=pm-utils
 
-QTIDATA:=rmnetctl kmod-rmnet-core libpugixml qps615
-
-QTIDATAPROP:=libqnicorn libqnicorn_internal qnicornd libnetmgr_rmnet_ext libqmi_client_helper libqmi_client_qmux qmi qmiidl qmiservices qmuxd QCMAP_ApInterface QCMAP_Bootup QCMAP_CLI QCMAP_ConnectionManager QCMAP_StaInterface adpl configdb dsi_netctrl dsutils eMBMs_TunnelingModule ipa_fws libnetmgr libnetmgr_common libqcmap_client libqcmap_cm libqcmaputils libqmi_ip netmgrd qdi qmi_ip_multiclient qti qti_ppp qti_socksv5 radish xmllib qps615-firmware
-
-QTIDATAINTERNAL:=aqr113-firmware kmod-aquantia
-
 define Profile/SDX65_Olympic
 	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
 		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTILOCATIONPROP) \
-		$(QTIDATA) $(QTIDATAPROP) $(QTIDATAINTERNAL) $(QTIRILPROP) \
+		$(QTIDATA) $(QTIDATAPROP) $(QTIRILPROP) \
 		-lacpd libtirpc -swconfig
 endef
 
