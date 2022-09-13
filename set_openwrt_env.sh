@@ -39,6 +39,23 @@ cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 cd $TOPDIR
 umask 022
 
+## Add mechanism to differentiate between internal & external build;
+## Further check to determine external build variant: HY11 & HY22.
+
+if [ ! -d owrt-qti-internal ]; then
+	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
+	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
+		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
+	fi
+
+	if [ -d $TOPDIR/../prebuilt_HY22 ]; then
+		sed -i '1s/^/EXTERNAL_VARIANT=HY22\n/' include/package.mk;
+	fi
+else
+	mkdir -p $TOPDIR/../prebuilt_HY11;
+	mkdir -p $TOPDIR/../prebuilt_HY22;
+fi
+
 # build commands for Kuno
 function build-sdxbaagha-image(){
     unset_owrt_env
