@@ -10,6 +10,11 @@ include $(TOPDIR)/owrt-qti-data/qtidata.mk
 include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 
+# include mk files available only in internal builds
+ifneq ($(EXTERNAL_BUILD),1)
+	include $(TOPDIR)/owrt-qti-location-internal/qtilocationinternal.mk
+endif
+
 OPENWRT_STANDARD:=luci openssl-util diag
 
 UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils
@@ -24,7 +29,8 @@ define Profile/SDX65_Olympic
 	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) $(QTILOCATION) $(QTILOCATIONPROP) \
+		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
+		$(QTILOCATION) $(QTILOCATIONPROP) $(QTILOCATIONINTERNAL) \
 		$(QTIDATA) $(QTIDATAPROP) $(QTIRILPROP) \
 		-lacpd libtirpc -swconfig
 endef
