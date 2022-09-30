@@ -41,6 +41,7 @@ define Profile/SDX75_Pinnacles
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
 		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
+		$(QTIRILPROP) \
 		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
 endef
 
