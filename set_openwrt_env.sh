@@ -56,6 +56,24 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
 
+function configure(){
+	if [ -z "${1}" ] || [ -z "${2}" ] || [ -z "${3}" ]
+	then
+		echo "Please provide all the arguments required to set up OpenWrt environment: TARGET PROFILE VARIANT" && exit 1
+	fi
+	echo "Setting up OpenWrt environment..."
+	echo "Target:  ${1}"
+	echo "Profile: ${2}"
+	echo "Variant: ${3}"
+	./scripts/feeds update -a || exit 1
+	./scripts/feeds install -a || exit 1
+	rm -rf .config
+	rm -rf tmp
+	cp owrt-qti-conf/${1}/${2}.config .config || exit 1
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || exit 1
+	make defconfig
+}
+
 # build commands for Kuno
 function build-sdxbaagha-image(){
     unset_owrt_env
@@ -91,7 +109,20 @@ function unset_owrt_env(){
     echo test
 }
 
-./scripts/feeds update -a
-./scripts/feeds install -a
-cp owrt-qti-conf/${TARGET_MACHINE}/${TARGET_MACHINE}_open.config .config
+
+if [ ! -z "${TARGET_MACHINE}" ]; then
+
+./scripts/feeds update -a || exit 1
+./scripts/feeds install -a || exit 1
+
+if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ]; then
+	cp owrt-qti-conf/${TARGET_MACHINE}/mbb.config .config || exit 1
+fi
+
+if [ ${TARGET_MACHINE} == 'sdx35' ]; then
+	cp owrt-qti-conf/${TARGET_MACHINE}/sdx35_open.config .config || exit 1
+fi
+
 make defconfig
+
+fi
