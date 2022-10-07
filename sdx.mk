@@ -25,39 +25,6 @@ ifeq ($(EXTERNAL_BUILD),1)
 QTIDATAPROP += xmllib_prebuilt libnetmgr_rmnet_ext_prebuilt
 endif
 
-define Profile/SDX65_Olympic
-	NAME:=Qualcomm Technologies, Inc SDX65 Olympic Profile
-	PACKAGES:=$(OPENWRT_STANDARD) \
-		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
-		$(QTILOCATION) $(QTILOCATIONPROP) $(QTILOCATIONINTERNAL) \
-		$(QTIDATA) $(QTIDATAPROP) $(QTIRILPROP) \
-		-lacpd libtirpc -swconfig
-endef
-
-define Profile/SDX65_Olympic/Description
-	Sdx65 Olympic package set configuration.
-	Enables sdx65 Olympic source packages
-endef
-
-$(eval $(call Profile,SDX65_Olympic))
-
-define Profile/SDX75_Pinnacles
-	NAME:=Qualcomm Technologies, Inc SDX75 Pinnacles Profile
-	PACKAGES:=$(OPENWRT_STANDARD) \
-		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
-		$(QTIRILPROP) \
-		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
-endef
-
-define Profile/SDX75_Pinnacles/Description
-	Sdx75 Pinnacles package set configuration.
-	Enables sdx75 Pinnacles source packages
-endef
-
-$(eval $(call Profile,SDX75_Pinnacles))
-
 define Profile/SDX35_Kuno
 	NAME:=Qualcomm Technologies, Inc SDX35 Kuno Profile
 	PACKAGES:=$(OPENWRT_STANDARD) \
