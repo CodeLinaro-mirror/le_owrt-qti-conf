@@ -63,6 +63,7 @@ define Profile/SDX35_Kuno
 	PACKAGES:=$(OPENWRT_STANDARD) \
 		$(COREBSP_UTILS) $(UTILS) \
 		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
+		$(QTIDATA) $(QTIDATAPROP) \
 		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
 endef
 
