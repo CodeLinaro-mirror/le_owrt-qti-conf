@@ -9,6 +9,8 @@ include $(TOPDIR)/owrt-qti-location-prop/qtilocationprop.mk
 include $(TOPDIR)/owrt-qti-data/qtidata.mk
 include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
+include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
+include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
 
 # include mk files available only in internal builds
 ifneq ($(EXTERNAL_BUILD),1)
