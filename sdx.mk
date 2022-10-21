@@ -26,20 +26,3 @@ COREBSP_UTILS:=pm-utils
 ifeq ($(EXTERNAL_BUILD),1)
 QTIDATAPROP += xmllib_prebuilt libnetmgr_rmnet_ext_prebuilt
 endif
-
-define Profile/SDX35_Kuno
-	NAME:=Qualcomm Technologies, Inc SDX35 Kuno Profile
-	PACKAGES:=$(OPENWRT_STANDARD) \
-		$(COREBSP_UTILS) $(UTILS) \
-		$(QTIBSP) $(QTIBSPPROP) $(QTICORE) $(QTICOREPROP) $(QTISSMGR) $(QTISSMGRPROP) \
-		$(QTIDATA) $(QTIDATAPROP) \
-		$(QTILOCATION) $(QTILOCATIONPROP) $(QTILOCATIONINTERNAL) \
-		ipa_fws -linux-msm-5.4_dt -lacpd libtirpc -swconfig
-endef
-
-define Profile/SDX35_Kuno/Description
-	Sdx35 Kuno package set configuration.
-	Enables sdx35 Kuno source packages
-endef
-
-$(eval $(call Profile,SDX35_Kuno))
