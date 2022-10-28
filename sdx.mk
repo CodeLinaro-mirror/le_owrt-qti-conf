@@ -11,6 +11,11 @@ include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
 include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
+include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
+include $(TOPDIR)/owrt-qti-args/qtiargs.mk
+include $(TOPDIR)/owrt-qti-pal/qtipal.mk
+include $(TOPDIR)/owrt-qti-agm/qtiagm.mk
+include $(TOPDIR)/owrt-qti-audio-prop/qtiaudioprop.mk
 
 # include mk files available only in internal builds
 ifneq ($(EXTERNAL_BUILD),1)
