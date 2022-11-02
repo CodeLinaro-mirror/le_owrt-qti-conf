@@ -120,7 +120,7 @@ if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ]; then
 fi
 
 if [ ${TARGET_MACHINE} == 'sdx35' ]; then
-	cp owrt-qti-conf/${TARGET_MACHINE}/sdx35_open.config .config || exit 1
+	cp owrt-qti-conf/${TARGET_MACHINE}/mbb.config .config || exit 1
 fi
 
 make defconfig
