@@ -71,42 +71,45 @@ function configure(){
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || exit 1
 	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || exit 1
+    if [ ${1} == 'sdx35' ]; then
+        if [ ${2} == 'mbb-128m' ]; then
+            sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=1/" target/linux/${1}/Makefile || exit 1
+            echo "set memopt flag..."
+        else
+            sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=0/" target/linux/${1}/Makefile || exit 1
+        fi
+    fi
 	make defconfig
 }
 
 # build commands for Kuno
 function build-sdxbaagha-image(){
     unset_owrt_env
-#    export TARGET_VARIANT=sdxbaagha
-#    export VARIANT=debug
+    configure sdx35 mbb debug
     make -j$(nproc) V=s
 }
 
 function build-sdxbaagha-perf-image(){
     unset_owrt_env
- #   export TARGET_VARIANT=sdxbaagha
- #   export VARIANT=perf
+    configure sdx35 mbb perf
     make -j$(nproc) V=s
 }
 
 
 function build-sdxbaagha-128m-image(){
     unset_owrt_env
- #   export TARGET_VARIANT=sdxbaagha-128m
- #   export VARIANT=debug
+    configure sdx35 mbb-128m debug
     make -j$(nproc) V=s
 }
 
 function build-sdxbaagha-128m-perf-image(){
     unset_owrt_env
-  #  export TARGET_VARIANT=sdxbaagha-128m
-  #  export VARIANT=perf
+    configure sdx35 mbb-128m perf
     make -j$(nproc) V=s
 }
 
 function unset_owrt_env(){
-#    unset TARGET_VARIANT VARIANT
-    echo test
+    echo "" 
 }
 
 
