@@ -21,6 +21,7 @@ include $(TOPDIR)/owrt-qti-audio-prop/qtiaudioprop.mk
 ifneq ($(EXTERNAL_BUILD),1)
 	include $(TOPDIR)/owrt-qti-location-internal/qtilocationinternal.mk
 	include $(TOPDIR)/owrt-qti-cta-internal/qtictainternal.mk
+	include $(TOPDIR)/owrt-qti-internal/qtinternal.mk
 endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
