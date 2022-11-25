@@ -18,12 +18,15 @@ include $(TOPDIR)/owrt-qti-args/qtiargs.mk
 include $(TOPDIR)/owrt-qti-pal/qtipal.mk
 include $(TOPDIR)/owrt-qti-agm/qtiagm.mk
 include $(TOPDIR)/owrt-qti-audio-prop/qtiaudioprop.mk
+include $(TOPDIR)/owrt-qti-security/qtisecurity.mk
+include $(TOPDIR)/owrt-qti-security-prop/qtisecurityprop.mk
 
 # include mk files available only in internal builds
 ifneq ($(EXTERNAL_BUILD),1)
 	include $(TOPDIR)/owrt-qti-location-internal/qtilocationinternal.mk
 	include $(TOPDIR)/owrt-qti-cta-internal/qtictainternal.mk
 	include $(TOPDIR)/owrt-qti-internal/qtinternal.mk
+	include $(TOPDIR)/owrt-qti-security-internal/qtisecurityinternal.mk
 endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
