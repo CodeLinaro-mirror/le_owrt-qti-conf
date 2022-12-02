@@ -39,11 +39,20 @@ TOPDIR=$(pwd)
 cd $TOPDIR
 umask 022
 
+function set_sectools_path(){
+        if [ -z "${SECTOOLS_PATH}" ]; then
+                echo "Please export SECTOOLS_PATH variable..."
+                return 1
+        fi
+	sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" include/package.mk || return
+}
+
 ## Add mechanism to differentiate between internal & external build;
 ## Further check to determine external build variant: HY11 & HY22.
 
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
+	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
 	fi
