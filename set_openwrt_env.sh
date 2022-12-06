@@ -34,7 +34,7 @@
 
 TOPDIR=$(pwd)
 
-cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
+/bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 cd $TOPDIR
 umask 022
@@ -56,21 +56,58 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
 
+
+function build_kernel(){
+
+	if [ -z "${1}" ] || [ -z "${2}" ]
+	then
+		echo "Please provide all the arguments required to build kernel: target & variant"
+		return
+	fi
+
+	echo "Building kernel for: TARGET=${1} and VARIANT=${2}"
+
+	if [ "${1}" = "sdx75" ]; then
+		TARGET=sdxpinn
+	fi
+	if [ "${1}" = "sdx35" ]; then
+		TARGET=sdxbaagha
+	fi
+
+	# Build/re-build kernel
+	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+
+	#Flag kernel build failure
+	if [ $? -eq 1 ]; then
+		echo "Kernel Build failed. Please check logs above for error..."
+		cd $TOPDIR
+		return
+	fi
+
+	# Re-process/re-extract the newly generated kernel products into the build system
+	cd $TOPDIR
+	if [ -d build_dir ]; then
+		make toolchain/kernel-headers/{clean,compile}
+	fi
+	echo "Kernel Build complete!"
+}
+
 function configure(){
 	if [ -z "${1}" ] || [ -z "${2}" ] || [ -z "${3}" ]
 	then
-		echo "Please provide all the arguments required to set up OpenWrt environment: TARGET PROFILE VARIANT" && exit 1
+		echo "Please provide all the arguments required to set up OpenWrt environment: TARGET PROFILE VARIANT" && return
 	fi
 	echo "Setting up OpenWrt environment..."
 	echo "Target:  ${1}"
 	echo "Profile: ${2}"
 	echo "Variant: ${3}"
-	./scripts/feeds update -a || exit 1
-	./scripts/feeds install -a || exit 1
+	./scripts/feeds update -a || return
+	./scripts/feeds install -a || return
 	rm -rf .config
 	rm -rf tmp
-	cp owrt-qti-conf/${1}/${2}.config .config || exit 1
-	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || exit 1
+	cp owrt-qti-conf/${1}/${2}.config .config || return
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
     if [ ${1} == 'sdx35' ]; then
         if [ ${2} == 'mbb-128m' ]; then
             sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=1/" target/linux/${1}/Makefile || exit 1
@@ -80,6 +117,15 @@ function configure(){
         fi
     fi
 	make defconfig
+
+#Add check to differentiate between local builds and crm builds
+	if [ "${1}" == "sdx75" ]; then
+		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+			build_kernel ${1} ${3}
+		fi
+	fi
+
+	echo "OpenWrt set up environment complete... Ready for make!"
 }
 
 # build commands for Kuno

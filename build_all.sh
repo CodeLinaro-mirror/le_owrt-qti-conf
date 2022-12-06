@@ -43,7 +43,7 @@ source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
 
 for config in ${TOPDIR}/owrt-qti-conf/${1}/*;
 do
-	configure ${1} $(basename "${config%.*}") ${2} || exit 1
+	configure ${1} $(basename "${config%.*}") ${2} disable_kernel || return
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
