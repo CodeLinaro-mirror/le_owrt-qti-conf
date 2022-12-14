@@ -79,10 +79,10 @@ function build_kernel(){
 	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
 
 	#Flag kernel build failure
-	if [ $? -eq 1 ]; then
+	if [ $? -ne 0 ]; then
 		echo "Kernel Build failed. Please check logs above for error..."
 		cd $TOPDIR
-		return
+		return 1
 	fi
 
 	# Re-process/re-extract the newly generated kernel products into the build system
@@ -118,9 +118,11 @@ function configure(){
     fi
 	make defconfig
 
-	#Add check to differentiate between local builds and crm builds
-	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-		build_kernel ${1} ${3}
+#Add check to differentiate between local builds and crm builds
+	if [ "${1}" == "sdx75" ]; then
+		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+			build_kernel ${1} ${3} || return
+		fi
 	fi
 
 	echo "OpenWrt set up environment complete... Ready for make!"
