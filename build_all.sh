@@ -35,7 +35,7 @@
 TOPDIR=$(pwd)
 make distclean
 rm -rf feeds.conf
-source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
+export SECTOOLS_PATH=/pkg/sectools/v2/latest/Linux && source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
 
 #configure ${1} recovery ${2} || exit 1
 #make -j32 || exit 1
