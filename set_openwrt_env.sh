@@ -74,17 +74,14 @@ function build_kernel(){
 		return
 	fi
 
-	echo "Building kernel for: TARGET=${1} and VARIANT=${2}"
+	IFS=''
+	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
 
-	if [ "${1}" = "sdx75" ]; then
-		TARGET=sdxpinn
-	fi
-	if [ "${1}" = "sdx35" ]; then
-		TARGET=sdxbaagha
-	fi
 	if [ "${3}" = "mbb-128m" ]; then
 		TARGET=sdxbaagha-128m
 	fi
+
+	echo "Building kernel for: TARGET=${TARGET}, VARIANT=${2}"
 
 	# Build/re-build kernel
 	cd $TOPDIR/src/kernel-5.15/kernel_platform
@@ -119,20 +116,36 @@ function configure(){
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
-	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
-    if [ ${1} == 'sdx35' ]; then
-        if [ ${2} == 'mbb-128m' ]; then
-            sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=1/" target/linux/${1}/Makefile || exit 1
-            echo "set memopt flag..."
-        else
-            sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=0/" target/linux/${1}/Makefile || exit 1
-        fi
-    fi
 	make defconfig
 
-	#Add check to differentiate between local builds and crm builds
-	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-		build_kernel ${1} ${3} ${2} || return
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
+
+	if [ ${1} == 'sdx35' ]; then
+		if [ ${2} == 'mbb-128m' ]; then
+			sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=1/" target/linux/${1}/Makefile || exit 1
+			echo "set memopt flag..."
+		else
+			sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=0/" target/linux/${1}/Makefile || exit 1
+		fi
+
+		#Add check to differentiate between local builds and crm builds
+		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+			build_kernel ${1} ${3} ${2} || return
+		fi
+	fi
+
+	if [ "${1}" == "sdx75" ]; then
+		if [ "${2}" = "mbb" ]; then
+			TARGET=sdxpinn
+		fi
+		if [ "${2}" = "cpe" ]; then
+			TARGET=sdxpinn-cpe-wkk
+		fi
+		sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
+		#Add check to differentiate between local builds and crm builds
+		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+			build_kernel ${1} ${3} || return
+		fi
 	fi
 
 	echo "OpenWrt set up environment complete... Ready for make!"
