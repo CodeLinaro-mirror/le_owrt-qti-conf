@@ -129,7 +129,7 @@ function configure(){
 # build commands for Kuno
 function build-sdxbaagha-image(){
     unset_owrt_env
-    configure sdx35 mbb debug
+    configure sdx35 mbb debug disable_kernel
     make -j$(nproc) V=s
 }
 
