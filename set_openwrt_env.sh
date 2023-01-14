@@ -139,34 +139,41 @@ function configure(){
 
 # build commands for Kuno
 function build-sdxbaagha-image(){
-    unset_owrt_env
     configure sdx35 mbb debug disable_kernel
-    make -j$(nproc) V=s
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return
+	fi
 }
 
 function build-sdxbaagha-perf-image(){
-    unset_owrt_env
     configure sdx35 mbb perf
-    make -j$(nproc) V=s
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return
+	fi
 }
 
 
 function build-sdxbaagha-128m-image(){
-    unset_owrt_env
     configure sdx35 mbb-128m debug
-    make -j$(nproc) V=s
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return
+	fi
 }
 
 function build-sdxbaagha-128m-perf-image(){
-    unset_owrt_env
     configure sdx35 mbb-128m perf
-    make -j$(nproc) V=s
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return
+	fi
 }
-
-function unset_owrt_env(){
-    echo "" 
-}
-
 
 if [ ! -z "${TARGET_MACHINE}" ]; then
 
