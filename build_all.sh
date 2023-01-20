@@ -41,6 +41,15 @@ export SECTOOLS_PATH=/pkg/sectools/v2/latest/Linux && source ${TOPDIR}/owrt-qti-
 #make -j32 || exit 1
 #make clean
 
+if [ ! -z "${3}" ]; then
+	configure ${1} ${2} ${3} disable_kernel || return
+	make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
+else
+
 for config in ${TOPDIR}/owrt-qti-conf/${1}/*;
 do
 	configure ${1} $(basename "${config%.*}") ${2} disable_kernel || return
@@ -50,3 +59,4 @@ do
 		exit 1
 	fi
 done
+fi
