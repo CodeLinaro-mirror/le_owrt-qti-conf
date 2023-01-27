@@ -143,7 +143,7 @@ function build-sdxbaagha-image(){
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
-		return
+		return 1
 	fi
 }
 
@@ -152,7 +152,7 @@ function build-sdxbaagha-perf-image(){
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
-		return
+		return 1
 	fi
 }
 
@@ -162,7 +162,7 @@ function build-sdxbaagha-128m-image(){
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
-		return
+		return 1
 	fi
 }
 
@@ -171,7 +171,7 @@ function build-sdxbaagha-128m-perf-image(){
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
-		return
+		return 1
 	fi
 }
 
