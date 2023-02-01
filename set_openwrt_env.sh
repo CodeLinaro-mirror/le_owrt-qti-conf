@@ -175,6 +175,17 @@ function build-sdxbaagha-128m-perf-image(){
 	fi
 }
 
+function build-all-sdxbaagha-images(){
+    make dirclean
+    build-sdxbaagha-image
+    make dirclean
+    build-sdxbaagha-perf-image
+    make dirclean
+    build-sdxbaagha-128m-image
+    make dirclean
+    build-sdxbaagha-128m-perf-image
+}
+
 if [ ! -z "${TARGET_MACHINE}" ]; then
 
 ./scripts/feeds update -a || exit 1
