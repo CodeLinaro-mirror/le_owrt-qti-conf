@@ -82,6 +82,9 @@ function build_kernel(){
 	if [ "${1}" = "sdx35" ]; then
 		TARGET=sdxbaagha
 	fi
+	if [ "${3}" = "mbb-128m" ]; then
+		TARGET=sdxbaagha-128m
+	fi
 
 	# Build/re-build kernel
 	cd $TOPDIR/src/kernel-5.15/kernel_platform
@@ -127,11 +130,9 @@ function configure(){
     fi
 	make defconfig
 
-#Add check to differentiate between local builds and crm builds
-	if [ "${1}" == "sdx75" ]; then
-		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-			build_kernel ${1} ${3} || return
-		fi
+	#Add check to differentiate between local builds and crm builds
+	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+		build_kernel ${1} ${3} ${2} || return
 	fi
 
 	echo "OpenWrt set up environment complete... Ready for make!"
