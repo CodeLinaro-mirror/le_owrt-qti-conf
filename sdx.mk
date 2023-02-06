@@ -27,6 +27,7 @@ ifneq ($(EXTERNAL_BUILD),1)
 	include $(TOPDIR)/owrt-qti-cta-internal/qtictainternal.mk
 	include $(TOPDIR)/owrt-qti-internal/qtinternal.mk
 	include $(TOPDIR)/owrt-qti-security-internal/qtisecurityinternal.mk
+	include $(TOPDIR)/owrt-qti-data-internal/qtidatainternal.mk
 endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
