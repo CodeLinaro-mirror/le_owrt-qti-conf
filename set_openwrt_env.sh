@@ -176,6 +176,24 @@ function build-sdxbaagha-128m-perf-image(){
 	fi
 }
 
+function build-sdxbaagha-m2-image(){
+    configure sdx35 m2 debug
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
+function build-sdxbaagha-m2-perf-image(){
+    configure sdx35 m2 perf
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
 function build-all-sdxbaagha-images(){
     make dirclean
     build-sdxbaagha-image
@@ -185,6 +203,10 @@ function build-all-sdxbaagha-images(){
     build-sdxbaagha-128m-image
     make dirclean
     build-sdxbaagha-128m-perf-image
+    make dirclean
+    build-sdxbaagha-m2-image
+    make dirclean
+    build-sdxbaagha-m2-perf-image
 }
 
 if [ ! -z "${TARGET_MACHINE}" ]; then
