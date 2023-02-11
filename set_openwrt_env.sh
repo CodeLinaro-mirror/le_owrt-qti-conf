@@ -76,11 +76,6 @@ function build_kernel(){
 
 	IFS=''
 	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
-
-	if [ "${3}" = "mbb-128m" ]; then
-		TARGET=sdxbaagha-128m
-	fi
-
 	echo "Building kernel for: TARGET=${TARGET}, VARIANT=${2}"
 
 	# Build/re-build kernel
@@ -120,18 +115,17 @@ function configure(){
 
 	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
 
-	if [ ${1} == 'sdx35' ]; then
-		if [ ${2} == 'mbb-128m' ]; then
-			sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=1/" target/linux/${1}/Makefile || exit 1
-			echo "set memopt flag..."
+	if [ "${1}" == "sdx35" ]; then
+		BUILD_WITH_MEMOPT=0
+		if [ "${2}" == "mbb" ]; then
+			TARGET=sdxbaagha
+		elif [ "${2}" == "mbb-128m" ]; then
+			BUILD_WITH_MEMOPT=1
+			TARGET=sdxbaagha-128m
 		else
-			sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=0/" target/linux/${1}/Makefile || exit 1
+			TARGET=sdxbaagha-128m
 		fi
-
-		#Add check to differentiate between local builds and crm builds
-		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-			build_kernel ${1} ${3} ${2} || return
-		fi
+		sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=${BUILD_WITH_MEMOPT}/" target/linux/${1}/Makefile || return
 	fi
 
 	if [ "${1}" == "sdx75" ]; then
@@ -141,11 +135,12 @@ function configure(){
 		if [ "${2}" = "cpe" ]; then
 			TARGET=sdxpinn-cpe-wkk
 		fi
-		sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
-		#Add check to differentiate between local builds and crm builds
-		if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-			build_kernel ${1} ${3} || return
-		fi
+	fi
+
+	sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
+	#Add check to differentiate between local builds and crm builds
+	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
+		build_kernel ${1} ${3} || return
 	fi
 
 	echo "OpenWrt set up environment complete... Ready for make!"
