@@ -129,7 +129,7 @@ function configure(){
 	fi
 
 	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" = "mbb" ]; then
+		if [ "${2}" = "mbb" ] || [ "${2}" = "recovery" ]; then
 			TARGET=sdxpinn
 		fi
 		if [ "${2}" = "cpe" ]; then

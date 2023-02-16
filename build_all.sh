@@ -37,12 +37,21 @@ make distclean
 rm -rf feeds.conf
 export SECTOOLS_PATH=/pkg/sectools/v2/latest/Linux && source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
 
-#configure ${1} recovery ${2} || exit 1
-#make -j32 || exit 1
-#make clean
-
 if [ ! -z "${3}" ]; then
-	configure ${1} ${2} ${3} disable_kernel || return
+	#************ triple variable input types TARGET-PROFILE-VARIANT ************
+	#Via build all, recovery will be built by default prior and for any of the tripple target
+	#inputs running in parallel. Clean and re-consume kernel products after recovery build.
+if [ "${1}" == "sdx75" ]; then
+	configure ${1} recovery ${3} || exit 1
+	make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
+	make clean
+	make toolchain/kernel-headers/{clean,compile}
+fi
+	configure ${1} ${2} ${3} disable_kernel || exit 1
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
@@ -50,13 +59,31 @@ if [ ! -z "${3}" ]; then
 	fi
 else
 
+#************ double variable input types TARGET-VARIANT ************
+#Via build all, recovery will be built by default prior to entering the loop
+#that builds all available profiles sequentially. Clean after recovery build.
+#Since configure is called without passing disable_kernel parameter, then
+#manual re-consumption of kernel products is not required, as it happens
+#as part of build_kernel call triggered within configure function.
+
+if [ "${1}" == "sdx75" ]; then
+configure ${1} recovery ${2} || exit 1
+make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
+make clean
+fi
+
 for config in ${TOPDIR}/owrt-qti-conf/${1}/*;
 do
-	configure ${1} $(basename "${config%.*}") ${2} disable_kernel || return
+	configure ${1} $(basename "${config%.*}") ${2} || exit 1
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
 		exit 1
 	fi
+	make clean
 done
 fi
