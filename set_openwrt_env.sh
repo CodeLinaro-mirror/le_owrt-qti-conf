@@ -65,6 +65,14 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
 
+function uname_version(){
+	IFS=''
+	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
+	IFS=' '
+	read DEFINE UTSRELEASE VERSION <<< $(cat src/kernel-5.15/out/msm-kernel-${TARGET}-${2}_defconfig/dist/kernel-headers/include/generated/utsrelease.h)
+	UNAME_R=$(echo ${VERSION} | tr -d '"')
+	sed -i "s/UNAME_VERSION:=.*/UNAME_VERSION:=${UNAME_R}/" target/linux/${1}/Makefile
+}
 
 function build_kernel(){
 
