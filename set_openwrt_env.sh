@@ -84,6 +84,7 @@ function build_kernel(){
 
 	IFS=''
 	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${2}/" target/linux/${1}/Makefile || return
 	echo "Building kernel for: TARGET=${TARGET}, VARIANT=${2}"
 
 	# Build/re-build kernel
@@ -120,6 +121,14 @@ function configure(){
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
 	make defconfig
+
+	# ----- USER Variant support -----
+	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" include/package.mk || return
+	if [ "${3}" == "user" ]; then
+		set ${1} ${2} perf
+		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" include/package.mk || return
+	fi
+	# -------------------------------
 
 	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
 
