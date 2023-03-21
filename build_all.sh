@@ -50,8 +50,21 @@ if [ "${1}" == "sdx75" ]; then
 	fi
 	make clean
 	make toolchain/kernel-headers/{clean,compile}
+
+	#Add CRM build support for mbb-min profile
+	if [ "${2}" == "mbb" ]; then
+		configure ${1} mbb-min ${3} disable_kernel || exit 1
+		make -j32
+		if [ $? -ne 0 ]; then
+			make -j1 V=s
+			exit 1
+		fi
+	fi
 fi
 	configure ${1} ${2} ${3} disable_kernel || exit 1
+	if [ "${2}" == "mbb" ]; then
+		make package/sign_abl/{clean,compile}
+	fi
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
