@@ -131,7 +131,7 @@ function configure(){
 			BUILD_WITH_MEMOPT=1
 			TARGET=sdxbaagha-128m
 		else
-			TARGET=sdxbaagha-128m
+			TARGET=sdxbaagha
 		fi
 		sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=${BUILD_WITH_MEMOPT}/" target/linux/${1}/Makefile || return
 	fi
