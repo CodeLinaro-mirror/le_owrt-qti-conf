@@ -59,17 +59,27 @@ if [ "${1}" == "sdx75" ]; then
 			make -j1 V=s
 			exit 1
 		fi
-	fi
-fi
-	configure ${1} ${2} ${3} disable_kernel || exit 1
-	if [ "${2}" == "mbb" ]; then
+
+		configure ${1} ${2} ${3} disable_kernel || exit 1
 		make package/sign_abl/{clean,compile}
+	fi
+	if [ "${2}" == "cpe" ]; then
+		 configure ${1} ${2} ${3} || exit 1
 	fi
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
 		exit 1
 	fi
+else
+	configure ${1} ${2} ${3} disable_kernel || exit 1
+	make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
+fi
+
 else
 
 #************ double variable input types TARGET-VARIANT ************
