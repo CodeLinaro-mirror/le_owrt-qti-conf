@@ -120,6 +120,17 @@ function configure(){
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
+
+	#Create separate rootfs for sdx75 recovery profile
+	if [ "${1}" == "sdx75" ]; then
+		if [ "${2}" == "recovery" ]; then
+			ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
+			CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
+		fi
+	fi
+
 	make defconfig
 
 	# ----- USER Variant support -----
