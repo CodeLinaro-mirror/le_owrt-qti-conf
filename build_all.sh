@@ -96,16 +96,6 @@ else
 #manual re-consumption of kernel products is not required, as it happens
 #as part of build_kernel call triggered within configure function.
 
-if [ "${1}" == "sdx75" ]; then
-configure ${1} recovery ${2} || exit 1
-make -j32
-	if [ $? -ne 0 ]; then
-		make -j1 V=s
-		exit 1
-	fi
-make clean
-fi
-
 for config in ${TOPDIR}/owrt-qti-conf/${1}/*;
 do
 	configure ${1} $(basename "${config%.*}") ${2} || exit 1
