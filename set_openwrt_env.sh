@@ -74,6 +74,19 @@ function uname_version(){
 	sed -i "s/UNAME_VERSION:=.*/UNAME_VERSION:=${UNAME_R}/" target/linux/${1}/Makefile
 }
 
+verify_target_configuration(){
+
+	CHECK_TARGET=$(grep -x "CONFIG_TARGET_${1}=y" ".config")
+
+	if [ -n "$CHECK_TARGET" ] ; then
+		echo "Target configured successfully!"
+	else
+		echo "ERROR: Incorrect target configuration, TARGET ${1} was not configured successfully; see logs/target/linux/${1}/dump.txt for details."
+		echo "If package group .mk file in sdx.mk is target specific, please move .mk include line in target/linux/${1}/profiles/${1}.mk"
+		return 1
+	fi
+}
+
 function build_kernel(){
 
 	if [ -z "${1}" ] || [ -z "${2}" ]
@@ -132,6 +145,7 @@ function configure(){
 	fi
 
 	make defconfig
+	verify_target_configuration ${1} || return 1
 
 	# ----- USER Variant support -----
 	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" include/package.mk || return
