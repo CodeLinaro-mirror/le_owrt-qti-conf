@@ -48,6 +48,8 @@ if [ "${1}" == "sdx75" ]; then
 		make -j1 V=s
 		exit 1
 	fi
+	make clean
+	make toolchain/kernel-headers/{clean,compile}
 
 	#Add CRM build support for mbb-min profile
 	if [ "${2}" == "mbb" ]; then
