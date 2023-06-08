@@ -81,7 +81,11 @@ else
 	make clean
 	make toolchain/kernel-headers/{clean,compile}
 
-	configure ${1} ${2} ${3} disable_kernel || exit 1
+	if [ "${2}" == "mbb-128m" ]; then
+		configure ${1} ${2} ${3} || exit 1
+	else
+		configure ${1} ${2} ${3} disable_kernel || exit 1
+	fi
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
