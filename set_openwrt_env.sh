@@ -190,7 +190,7 @@ function configure(){
 
 # build commands for Kuno
 function build-sdxbaagha-image(){
-    configure sdx35 mbb debug disable_kernel
+    configure sdx35 mbb debug
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
