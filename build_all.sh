@@ -33,8 +33,10 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 TOPDIR=$(pwd)
+if [ -z "${4}" ] || [ "${4}" == "clean" ]; then
 make distclean
 rm -rf feeds.conf
+fi
 export SECTOOLS_PATH=/pkg/sectools/v2/latest/Linux && source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
 
 if [ ! -z "${3}" ]; then
