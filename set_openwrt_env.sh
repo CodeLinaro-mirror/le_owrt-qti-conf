@@ -150,7 +150,12 @@ function build_kernel(){
 
 	# Build/re-build kernel
 	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	rm -rf ../out/msm-kernel-${TARGET}-${2}_defconfig
+	if [ -f prebuilts/qcom_boot_artifacts/build.config.qc.standalone ]; then
+	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	else
 	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	fi
 
 	#Flag kernel build failure
 	if [ $? -ne 0 ]; then
