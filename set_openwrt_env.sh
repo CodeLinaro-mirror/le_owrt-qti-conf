@@ -36,6 +36,10 @@ TOPDIR=$(pwd)
 
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
+unlink $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor
+mkdir -p $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor
+/bin/cp -rp $TOPDIR/src/kernel-5.15/kernel_platform/qcom/proprietary/devicetree/* $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor/
+
 cd $TOPDIR
 umask 022
 
