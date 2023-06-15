@@ -87,6 +87,17 @@ verify_target_configuration(){
 	fi
 }
 
+function build_abl_user(){
+	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	export TARGET_BUILD_VARIANT=user && BUILD_CONFIG=msm-kernel/build.config.msm.${1} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${1}-${2}_defconfig ./build/build_abl.sh
+	if [ $? -ne 0 ]; then
+		echo "ABL user build failed. Please check logs above for error..."
+		cd $TOPDIR
+		return 1
+	fi
+	cd $TOPDIR
+}
+
 function build_kernel(){
 
 	if [ -z "${1}" ] || [ -z "${2}" ]
@@ -111,8 +122,14 @@ function build_kernel(){
 		return 1
 	fi
 
-	# Re-process/re-extract the newly generated kernel products into the build system
 	cd $TOPDIR
+
+	USER_VARIANT=$(sed -n -e '/USER_VARIANT/ s/.*= *//p' "include/package.mk")
+	if [ "${USER_VARIANT}" == "1" ]; then
+		build_abl_user ${TARGET} ${2}
+	fi
+
+	# Re-process/re-extract the newly generated kernel products into the build system
 	if [ -d build_dir ]; then
 		make toolchain/kernel-headers/{clean,compile}
 	fi
