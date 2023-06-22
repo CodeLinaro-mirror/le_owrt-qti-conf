@@ -74,6 +74,43 @@ function uname_version(){
 	sed -i "s/UNAME_VERSION:=.*/UNAME_VERSION:=${UNAME_R}/" target/linux/${1}/Makefile
 }
 
+function set_up_feeds(){
+	rm -rf feeds
+	./scripts/feeds update -a || return
+	./scripts/feeds install -a || return
+}
+
+function patch_upstream_feeds(){
+	feeds=(packages luci routing)
+	feeds_path=$TOPDIR/feeds
+	patches=$TOPDIR/owrt-qti-conf/feeds_patches
+	for feed in ${feeds[@]}; do
+		for patch in $patches/$feed/*.patch; do
+			cd $feeds_path/$feed
+			if [ -f "$patch" ]; then
+				git am $patch
+				if [ $? -ne 0 ]; then
+					echo "----------------------------------------------------------------------------------------------------------------"
+					echo "Patch $patch failed to apply."
+					echo "Please resolve any conflicts before moving forward with patch application."
+					echo "Once conflicts are resolved, please re-apply patches to upstream feeds following one of the options below:"
+					echo "	1) re-run configure step; it will automatically ensure patching of upstream feeds:"
+					echo "		$ configure <target> <profile> <variant>"
+					echo "	2) individual invocation of patch_upstream_feeds function after resetting upstream feeds:"
+					echo "		$ set_up_feeds"
+					echo "		$ patch_upstream_feeds"
+					echo ""
+					echo "Note: make sure to $ source owrt-qti-conf/set_openwrt_env.sh before proceeding with either of the above options."
+					echo "----------------------------------------------------------------------------------------------------------------"
+					cd $TOPDIR
+					return 1
+				fi
+			fi
+		done
+	done
+	cd $TOPDIR
+}
+
 verify_target_configuration(){
 
 	CHECK_TARGET=$(grep -x "CONFIG_TARGET_${1}=y" ".config")
@@ -145,8 +182,8 @@ function configure(){
 	echo "Target:  ${1}"
 	echo "Profile: ${2}"
 	echo "Variant: ${3}"
-	./scripts/feeds update -a || return
-	./scripts/feeds install -a || return
+	set_up_feeds || return 1
+	patch_upstream_feeds || return 1
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
