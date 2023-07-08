@@ -1,0 +1,26 @@
+From ddc739aae77b2b752fc2d5c77547f390371bc5c5 Mon Sep 17 00:00:00 2001
+From: Bjordis Collaku <quic_bcollaku@quicinc.com>
+Date: Fri, 16 Jun 2023 14:52:36 -0700
+Subject: [PATCH] luci: remove liblucihttp-lua dependecy from luci-lib-base
+ Makefile
+
+---
+ libs/luci-lib-base/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libs/luci-lib-base/Makefile b/libs/luci-lib-base/Makefile
+index 35b1836..2d2c8c4 100644
+--- a/libs/luci-lib-base/Makefile
++++ b/libs/luci-lib-base/Makefile
+@@ -7,7 +7,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ LUCI_TITLE:=basic libraries for luci
+-LUCI_DEPENDS:=+lua +luci-lib-nixio +luci-lib-ip +luci-lib-jsonc +liblucihttp-lua
++LUCI_DEPENDS:=+lua +luci-lib-nixio +luci-lib-ip +luci-lib-jsonc
+ 
+ include ../../luci.mk
+ 
+-- 
+2.7.4
+
