@@ -33,8 +33,10 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 TOPDIR=$(pwd)
+if [ -z "${4}" ] || [ "${4}" == "clean" ]; then
 make distclean
 rm -rf feeds.conf
+fi
 export SECTOOLS_PATH=/pkg/sectools/v2/latest/Linux && source ${TOPDIR}/owrt-qti-conf/set_openwrt_env.sh
 
 if [ ! -z "${3}" ]; then
@@ -42,14 +44,12 @@ if [ ! -z "${3}" ]; then
 	#Via build all, recovery will be built by default prior and for any of the tripple target
 	#inputs running in parallel. Clean and re-consume kernel products after recovery build.
 if [ "${1}" == "sdx75" ]; then
-	configure ${1} recovery ${3} || exit 1
+	configure ${1} recovery ${3} disable_kernel || exit 1
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
 		exit 1
 	fi
-	make clean
-	make toolchain/kernel-headers/{clean,compile}
 
 	#Add CRM build support for mbb-min profile
 	if [ "${2}" == "mbb" ]; then
@@ -64,7 +64,8 @@ if [ "${1}" == "sdx75" ]; then
 		make package/sign_abl/{clean,compile}
 	fi
 	if [ "${2}" == "cpe" ]; then
-		 configure ${1} ${2} ${3} || exit 1
+		configure ${1} ${2} ${3} disable_kernel|| exit 1
+		make toolchain/kernel-headers/{clean,compile}
 	fi
 	make -j32
 	if [ $? -ne 0 ]; then
@@ -81,7 +82,11 @@ else
 	make clean
 	make toolchain/kernel-headers/{clean,compile}
 
-	configure ${1} ${2} ${3} disable_kernel || exit 1
+	if [ "${2}" == "mbb-128m" ]; then
+		configure ${1} ${2} ${3} || exit 1
+	else
+		configure ${1} ${2} ${3} disable_kernel || exit 1
+	fi
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s

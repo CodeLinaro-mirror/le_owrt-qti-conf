@@ -78,6 +78,43 @@ function uname_version(){
 	sed -i "s/UNAME_VERSION:=.*/UNAME_VERSION:=${UNAME_R}/" target/linux/${1}/Makefile
 }
 
+function set_up_feeds(){
+	rm -rf feeds
+	./scripts/feeds update -a || return
+	./scripts/feeds install -a || return
+}
+
+function patch_upstream_feeds(){
+	feeds=(packages luci routing)
+	feeds_path=$TOPDIR/feeds
+	patches=$TOPDIR/owrt-qti-conf/feeds_patches
+	for feed in ${feeds[@]}; do
+		for patch in $patches/$feed/*.patch; do
+			cd $feeds_path/$feed
+			if [ -f "$patch" ]; then
+				git am $patch
+				if [ $? -ne 0 ]; then
+					echo "----------------------------------------------------------------------------------------------------------------"
+					echo "Patch $patch failed to apply."
+					echo "Please resolve any conflicts before moving forward with patch application."
+					echo "Once conflicts are resolved, please re-apply patches to upstream feeds following one of the options below:"
+					echo "	1) re-run configure step; it will automatically ensure patching of upstream feeds:"
+					echo "		$ configure <target> <profile> <variant>"
+					echo "	2) individual invocation of patch_upstream_feeds function after resetting upstream feeds:"
+					echo "		$ set_up_feeds"
+					echo "		$ patch_upstream_feeds"
+					echo ""
+					echo "Note: make sure to $ source owrt-qti-conf/set_openwrt_env.sh before proceeding with either of the above options."
+					echo "----------------------------------------------------------------------------------------------------------------"
+					cd $TOPDIR
+					return 1
+				fi
+			fi
+		done
+	done
+	cd $TOPDIR
+}
+
 verify_target_configuration(){
 
 	CHECK_TARGET=$(grep -x "CONFIG_TARGET_${1}=y" ".config")
@@ -89,6 +126,17 @@ verify_target_configuration(){
 		echo "If package group .mk file in sdx.mk is target specific, please move .mk include line in target/linux/${1}/profiles/${1}.mk"
 		return 1
 	fi
+}
+
+function build_abl_user(){
+	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	export TARGET_BUILD_VARIANT=user && BUILD_CONFIG=msm-kernel/build.config.msm.${1} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${1}-${2}_defconfig ./build/build_abl.sh
+	if [ $? -ne 0 ]; then
+		echo "ABL user build failed. Please check logs above for error..."
+		cd $TOPDIR
+		return 1
+	fi
+	cd $TOPDIR
 }
 
 function build_kernel(){
@@ -115,8 +163,14 @@ function build_kernel(){
 		return 1
 	fi
 
-	# Re-process/re-extract the newly generated kernel products into the build system
 	cd $TOPDIR
+
+	USER_VARIANT=$(sed -n -e '/USER_VARIANT/ s/.*= *//p' "include/package.mk")
+	if [ "${USER_VARIANT}" == "1" ]; then
+		build_abl_user ${TARGET} ${2}
+	fi
+
+	# Re-process/re-extract the newly generated kernel products into the build system
 	if [ -d build_dir ]; then
 		make toolchain/kernel-headers/{clean,compile}
 	fi
@@ -132,8 +186,8 @@ function configure(){
 	echo "Target:  ${1}"
 	echo "Profile: ${2}"
 	echo "Variant: ${3}"
-	./scripts/feeds update -a || return
-	./scripts/feeds install -a || return
+	set_up_feeds || return 1
+	patch_upstream_feeds || return 1
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
@@ -153,9 +207,11 @@ function configure(){
 
 	# ----- USER Variant support -----
 	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" include/package.mk || return
+	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" target/linux/${1}/Makefile || return
 	if [ "${3}" == "user" ]; then
 		set ${1} ${2} perf
 		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" include/package.mk || return
+		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" target/linux/${1}/Makefile || return
 	fi
 	# -------------------------------
 
@@ -194,7 +250,7 @@ function configure(){
 
 # build commands for Kuno
 function build-sdxbaagha-image(){
-    configure sdx35 mbb debug disable_kernel
+    configure sdx35 mbb debug
     make -j$(nproc)
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
