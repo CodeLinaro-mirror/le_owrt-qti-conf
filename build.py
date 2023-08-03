@@ -3,10 +3,26 @@
 
 import argparse
 import os
+import sys
 import subprocess
 
-TOPDIR = os.getcwd()
-source_script = os.path.join(TOPDIR, 'owrt-qti-conf/set_openwrt_env.sh')
+def get_owrt_root_path():
+    """Get the path to the OpenWrt build system's root directory."""
+    # Get the path of the current script
+    current_script_path = os.path.realpath(sys.argv[0])
+
+    # Navigate up one level (to the parent directory)
+    parent_directory = os.path.abspath(os.path.join(current_script_path, os.pardir))
+
+    # Navigate up again to get to the root directory of the OpenWrt build system (owrt/)
+    owrt_root_path = os.path.abspath(os.path.join(parent_directory, os.pardir))
+    return owrt_root_path
+
+TOPDIR = get_owrt_root_path()
+# Change the current working directory to the OpenWrt root path
+os.chdir(TOPDIR)
+
+source_script = os.path.relpath(os.path.join(TOPDIR, 'owrt-qti-conf/set_openwrt_env.sh'))
 
 #retrieve configure function implementation from set_openwrt_env.sh
 #add configure function definition in python accepting following parameters:
