@@ -44,14 +44,12 @@ if [ ! -z "${3}" ]; then
 	#Via build all, recovery will be built by default prior and for any of the tripple target
 	#inputs running in parallel. Clean and re-consume kernel products after recovery build.
 if [ "${1}" == "sdx75" ]; then
-	configure ${1} recovery ${3} || exit 1
+	configure ${1} recovery ${3} disable_kernel || exit 1
 	make -j32
 	if [ $? -ne 0 ]; then
 		make -j1 V=s
 		exit 1
 	fi
-	make clean
-	make toolchain/kernel-headers/{clean,compile}
 
 	#Add CRM build support for mbb-min profile
 	if [ "${2}" == "mbb" ]; then
@@ -66,7 +64,8 @@ if [ "${1}" == "sdx75" ]; then
 		make package/sign_abl/{clean,compile}
 	fi
 	if [ "${2}" == "cpe" ]; then
-		 configure ${1} ${2} ${3} || exit 1
+		configure ${1} ${2} ${3} disable_kernel|| exit 1
+		make toolchain/kernel-headers/{clean,compile}
 	fi
 	make -j32
 	if [ $? -ne 0 ]; then

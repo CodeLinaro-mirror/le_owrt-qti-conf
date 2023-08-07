@@ -1,0 +1,25 @@
+From e335e1a876bc63fbdf9a473ff7a3b100d671218a Mon Sep 17 00:00:00 2001
+From: Bjordis Collaku <quic_bcollaku@quicinc.com>
+Date: Wed, 21 Jun 2023 21:18:02 -0700
+Subject: [PATCH] packages: Update bind module title to bind-utility
+
+---
+ net/bind/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/bind/Makefile b/net/bind/Makefile
+index 8f78b1d..92e261f 100644
+--- a/net/bind/Makefile
++++ b/net/bind/Makefile
+@@ -47,7 +47,7 @@ define Package/bind/Default
+   SECTION:=net
+   CATEGORY:=Network
+   DEPENDS:=+bind-libs +@OPENSSL_WITH_EC
+-  TITLE:=bind
++  TITLE:=bind-utility
+   URL:=https://www.isc.org/software/bind
+   SUBMENU:=IP Addresses and Names
+ endef
+-- 
+2.7.4
+
