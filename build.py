@@ -46,8 +46,8 @@ parser.add_argument('--variant', default='debug', help='Specify the variant to b
 args = parser.parse_args()
 
 # Validate the arguments
-valid_targets = ['sdx75']
-valid_profiles = ['mbb', 'cpe']
+valid_targets = ['sdx75', 'sdx35']
+valid_profiles = ['mbb', 'cpe', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 
 if args.target not in valid_targets:
@@ -85,10 +85,11 @@ if make_result.returncode != 0:
 #		{clean,compile} sign abl package, previously built & deployed for mbb-min
 
 if args.profile == 'mbb':
-    configure(args.target, 'mbb-min', args.variant, disable_kernel='disable_kernel')
-    make_result = subprocess.run(['make', '-j32'], check=True)
-    if make_result.returncode != 0:
-        subprocess.run(['make', '-j1', 'V=s'], check=True)
+    if args.target != 'sdx35':
+        configure(args.target, 'mbb-min', args.variant, disable_kernel='disable_kernel')
+        make_result = subprocess.run(['make', '-j32'], check=True)
+        if make_result.returncode != 0:
+            subprocess.run(['make', '-j1', 'V=s'], check=True)
 
     configure(args.target, args.profile, args.variant, disable_kernel='disable_kernel')
     subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
@@ -103,6 +104,14 @@ if args.profile == 'mbb':
 
 if args.profile == 'cpe':
     configure(args.target, args.profile, args.variant)
+
+if args.profile == 'm2':
+    configure(args.target, args.profile, args.variant, disable_kernel='disable_kernel')
+    subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
+
+if args.profile == 'mbb-128m':
+    configure(args.target, args.profile, args.variant)
+    subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
 
 make_result = subprocess.run(['make', '-j32'], check=True)
 if make_result.returncode != 0:
