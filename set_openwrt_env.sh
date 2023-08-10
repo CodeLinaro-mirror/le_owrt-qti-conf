@@ -135,26 +135,60 @@ function build_abl_user(){
 	cd $TOPDIR
 }
 
-function build_kernel(){
+# arguments: sdx_target, kp_target, kp_variant
+# To be used:
+#	build_kernel_platform --> local build either via build.py or via configure (where kernel re-build is mandated)
+#	automation --> to only set kernel target & variant required for consumption of kernel products, but no kernel re-build
+function set_kernel_target(){
+	#****** USER Variant Support : dynamically set/reset flags for target build *******
+	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" target/linux/${1}/Makefile || return 1
 
-	if [ -z "${1}" ] || [ -z "${2}" ]
+	if [ "${3}" == "user" ]; then
+		set ${1} ${2} perf # user build uses perf kernel artifacts, ${3} now set to perf
+		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" target/linux/${1}/Makefile || return 1
+	fi
+	#**********************************************************************
+
+	# Dynamically set/update KERNEL_PLATFORM_TARGET in ${1}/Makefile accordingly based on ${2}=kp_target argument
+	# Variable will be used to consume the right kp_artifacts in build.py sequence of configuration & build
+	sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${2}/" target/linux/${1}/Makefile || return 1
+
+	# Dynamically set/update TARGET_VARIANT in ${1}/Makefile accordingly based on ${3}=kp_variant argument
+	# Variable will be used to consume the right kp_artifacts in build.py sequence of configuration & build
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return 1
+}
+
+# plain kernel platform build, takes as arguments sdx_target, kp_target and kp_variant
+# profile input not required (no consumption of kp products)
+# to be individually called ONLY in build.py to trigger plain kernel build prior to any profile configuration
+#  if {3}=kp_variant is passed as user, set USER flag for target build in sdx_target/Makefile, set {3} to perf, user build uses perf kernel artifacts
+#        This ensures individual invocations of "build_kernel sdx_target user" or "build_kernel_platform sdx_target kp_target user" are supported
+#        Flag in sdx_target/Makefile to be used for target only related operations: trigger build for abl_user & deplying of user images
+# In addition, build_kernel_platform:
+#        sets/updates KERNEL_PLATFORM_TARGET in ${1}/Makefile accordingly based on ${2}=kp_target argument
+#        sets/updates TARGET_VARIANT in ${1}/Makefile accordingly based ${3}=kp_variant argument
+#			edge case, ${3} passed as user, set/updated as 'perf' prior to dynamically setting TARGET_VARIANT
+function build_kernel_platform(){
+	if [ -z "${1}" ] || [ -z "${2}" ] || [ -z "${3}" ]
 	then
-		echo "Please provide all the arguments required to build kernel: target & variant"
+		echo "Please provide all the arguments required to build kernel: chip_target, kp_target, kp_variant"
 		return
 	fi
 
-	IFS=''
-	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
-	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${2}/" target/linux/${1}/Makefile || return
-	echo "Building kernel for: TARGET=${TARGET}, VARIANT=${2}"
+	set_kernel_target ${1} ${2} ${3} || return 1
+
+	if [ "${3}" == "user" ]; then
+		set ${1} ${2} perf # user build uses perf kernel artifacts, ${3} now set to perf
+	fi
 
 	# Build/re-build kernel
+	echo "Building kernel for: TARGET=${2}, VARIANT=${3}"
 	cd $TOPDIR/src/kernel-5.15/kernel_platform
-	rm -rf ../out/msm-kernel-${TARGET}-${2}_defconfig
+	rm -rf ../out/msm-kernel-${2}-${3}_defconfig
 	if [ -f prebuilts/qcom_boot_artifacts/build.config.qc.standalone ]; then
-	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	BUILD_CONFIG=msm-kernel/build.config.msm.${2} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
 	else
-	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	BUILD_CONFIG=msm-kernel/build.config.msm.${2} VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
 	fi
 
 	#Flag kernel build failure
@@ -166,18 +200,80 @@ function build_kernel(){
 
 	cd $TOPDIR
 
-	USER_VARIANT=$(sed -n -e '/USER_VARIANT/ s/.*= *//p' "include/package.mk")
+	# If USER_VARIANT flag in sdx_target/Makefile is set, trigger build for abl_user
+	USER_VARIANT=$(sed -n -e '/USER_VARIANT/ s/.*= *//p' "target/linux/${1}/Makefile")
 	if [ "${USER_VARIANT}" == "1" ]; then
-		build_abl_user ${TARGET} ${2}
+		build_abl_user ${2} ${3}
 	fi
+}
 
-	# Re-process/re-extract the newly generated kernel products into the build system
+# called in build_kernel function during:
+#	non-recovery profile configuration step (called as part of configure)
+#	incremental kernel builds, in a non-recovery profile configured workspace
+# called in build.py post build_kernel_platform call, prior to any profile configuration
+#	Case 1: fresh sync / distclean -->
+#		NO OP: make toolchain/kernel-headers/{clean,compile} will be skipped since build_dir not present
+#		Kernel Products will be consumed ONCE during the FIRST overall toolchain build
+#	Case 2: incremental builds (post make clean)
+#		Since make clean only nukes target folder, build_dir remains present
+#		It will trigger {clean,compile} of toolchain/kernel-headers and re-consume the kernel artifacts
+# no arguments, operates based on following variables dynamically set in target/linux/sdx_target/Makefile:
+#        KERNEL_PLATFORM_TARGET
+#        TARGET_VARIANT
+# BOTH build_kernel_platform & configure tool CAN set/update KERNEL_PLATFORM_TARGET
+# ONLY build_kernel_platform CAN set/update TARGET_VARIANT
+function consume_kernel_artifacts(){
+	# Re-process/re-extract the latest generated kernel artifacts into the build system
 	if [ -d build_dir ]; then
 		make toolchain/kernel-headers/{clean,compile}
 	fi
-	echo "Kernel Build complete!"
 }
 
+# takes as argument ${1}=sdx_target
+# called in build_kernel to read the configured kernel platform target
+# required to avoid having to input profile for build_kernel tool
+# KERNEL_PLATFOFRM_TARGET can be deduced from target/linux/${1}/Makefile
+function get_kernel_platform_target(){
+	if [ -z "${1}" ]
+	then
+		echo "Please provide all the arguments required to get/read kernel platform target: sdx_target"
+		return
+	fi
+	IFS=''
+	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
+	echo ${TARGET}
+}
+
+# takes as argument: sdx_target, variant
+# used in individual configuration of non-recovery profiles, called within configure function
+# used for incremental kernel-builds in post-configured non-recovery profile workspaces
+# can read but not set/update KERNEL_PLATFORM_TARGET in target/linux/${1}/Makefile
+function build_kernel(){
+
+	if [ -z "${1}" ] || [ -z "${2}" ]
+	then
+		echo "Please provide all the arguments required to build kernel: sdx_target & variant"
+		return 1
+	fi
+
+	TARGET=$(get_kernel_platform_target ${1})
+	build_kernel_platform ${1} ${TARGET} ${2} || return 1
+	consume_kernel_artifacts || return 1
+
+	echo "Kernel Build complete!"
+	cd $TOPDIR
+}
+
+# core function, used to configure OpenWrt enviroment for specific target, profile, variant
+# 	sets up upstream feeds, ensures patching of upstream feeds
+# 	based on target, profile, variant provided:
+# 		enables respective package groups part of profile definition for that specific target
+# 		runs make defconfig to construct complete userspace config: upstream + downstream
+# 		validates final target configuration by verifying .config output from make defconfig
+# 		determines and sets KENREL_PLATFORM_TARGET variable for non-recovery profiles
+# 		accordingly triggers kernel build & consumption of kernel products via build_kernel function call
+# based on variant provided:
+# 		USER case, sets neccessary userspace flags to support USER build
 function configure(){
 	if [ -z "${1}" ] || [ -z "${2}" ] || [ -z "${3}" ]
 	then
@@ -193,33 +289,25 @@ function configure(){
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
 
-	#Create separate rootfs for recovery profile
-	if [ "${2}" == "recovery" ]; then
-		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
-		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
-		if [ "${1}" == "sdx35" ]; then
-			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
-			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
-		else
+	#Create separate rootfs for sdx75 recovery profile
+	if [ "${1}" == "sdx75" ]; then
+		if [ "${2}" == "recovery" ]; then
+			ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
+			CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 		fi
-		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
 
 	make defconfig
 	verify_target_configuration ${1} || return 1
 
-	# ----- USER Variant support -----
+	# ----- USER Variant support : set/reset userspace FLAG -----
 	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" include/package.mk || return
-	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" target/linux/${1}/Makefile || return
 	if [ "${3}" == "user" ]; then
-		set ${1} ${2} perf
 		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" include/package.mk || return
-		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" target/linux/${1}/Makefile || return
 	fi
-	# -------------------------------
-
-	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return
+	# -----------------------------------------------------------
 
 	if [ "${1}" == "sdx35" ]; then
 		BUILD_WITH_MEMOPT=0
@@ -235,18 +323,23 @@ function configure(){
 	fi
 
 	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ] || [ "${2}" = "recovery" ]; then
+		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 			TARGET=sdxpinn
 		fi
 		if [ "${2}" = "cpe" ]; then
 			TARGET=sdxpinn-cpe-wkk
 		fi
+		if [ "${2}" = "mbb-512" ]; then
+			TARGET=sdxpinn-512
+		fi
 	fi
 
-	sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
+	if [ "${2}" != "recovery" ]; then
+		sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
+	fi
 	#Add check to differentiate between local builds and crm builds
 	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
-		build_kernel ${1} ${3} || return
+		build_kernel ${1} ${3} || return 1
 	fi
 
 	echo "OpenWrt set up environment complete... Ready for make!"
