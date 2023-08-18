@@ -1,0 +1,30 @@
+From 51a4b73b6d755c0b7e164ce46e3171362133fa3a Mon Sep 17 00:00:00 2001
+From: Xin Deng <quic_deng@quicinc.com>
+Date: Wed, 9 Aug 2023 00:41:19 -0700
+Subject: [PATCH] freeRadius3: stop radiusd service auto start on SDX75
+
+freeRadius3 can be used as internal radius server for SDX75, but it
+needs configure parameters like eap method and certificates before
+start, so it unnecessary auto start on the device.
+Stop radiusd service auto start on SDX75.
+
+Signed-off-by: Xin Deng <quic_deng@quicinc.com>
+---
+ net/freeradius3/files/radiusd.init | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/net/freeradius3/files/radiusd.init b/net/freeradius3/files/radiusd.init
+index 10ed5ba5ee..201c77c2c9 100644
+--- a/net/freeradius3/files/radiusd.init
++++ b/net/freeradius3/files/radiusd.init
+@@ -5,7 +5,6 @@
+ 
+ USE_PROCD=1
+ 
+-START=50
+ 
+ NAME=radiusd
+ PROG=/usr/sbin/radiusd
+-- 
+2.17.1
+
