@@ -154,7 +154,12 @@ function build_kernel(){
 
 	# Build/re-build kernel
 	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	rm -rf ../out/msm-kernel-${TARGET}-${2}_defconfig
+	if [ -f prebuilts/qcom_boot_artifacts/build.config.qc.standalone ]; then
+	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	else
 	BUILD_CONFIG=msm-kernel/build.config.msm.${TARGET} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${TARGET}-${2}_defconfig ./build/build.sh
+	fi
 
 	#Flag kernel build failure
 	if [ $? -ne 0 ]; then
@@ -192,14 +197,17 @@ function configure(){
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
 
-	#Create separate rootfs for sdx75 recovery profile
-	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" == "recovery" ]; then
-			ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
-			CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
+	#Create separate rootfs for recovery profile
+	if [ "${2}" == "recovery" ]; then
+		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
+		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
+		if [ "${1}" == "sdx35" ]; then
+			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
+		else
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
-			sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 		fi
+		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
 
 	make defconfig
