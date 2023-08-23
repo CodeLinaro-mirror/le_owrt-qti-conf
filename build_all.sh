@@ -79,7 +79,6 @@ else
 		make -j1 V=s
 		exit 1
 	fi
-	make clean
 	make toolchain/kernel-headers/{clean,compile}
 
 	if [ "${2}" == "mbb-128m" ]; then
