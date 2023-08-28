@@ -135,27 +135,38 @@ function build_abl_user(){
 	cd $TOPDIR
 }
 
+
+# arguments: sdx_target, kp_variant
+# dedicated function to set only TARGET_VARIANT, handles 'user' variant edge case
+# invoked in set_kernel_target -> used in build.py
+# invoked in configure for recovery profile case
+#	set only TARGET_VARIANT, but not KERNEL_PLATFORM_TARGET
+#	neccessary to maintain backward compatibility with build_all
+function set_kernel_variant(){
+#****** USER Variant Support : dynamically set/reset flags for target build *******
+	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" target/linux/${1}/Makefile || return 1
+
+	if [ "${2}" == "user" ]; then
+		set ${1} perf # user build uses perf kernel artifacts, ${2} now set to perf
+		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" target/linux/${1}/Makefile || return 1
+	fi
+	#**********************************************************************
+
+	# Dynamically set/update TARGET_VARIANT in ${1}/Makefile accordingly based on ${2}=kp_variant argument
+	# Variable will be used to consume the right kp_artifacts in build.py sequence of configuration & build
+	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${2}/" target/linux/${1}/Makefile || return 1
+}
+
 # arguments: sdx_target, kp_target, kp_variant
 # To be used:
 #	build_kernel_platform --> local build either via build.py or via configure (where kernel re-build is mandated)
 #	automation --> to only set kernel target & variant required for consumption of kernel products, but no kernel re-build
 function set_kernel_target(){
-	#****** USER Variant Support : dynamically set/reset flags for target build *******
-	sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=0/" target/linux/${1}/Makefile || return 1
-
-	if [ "${3}" == "user" ]; then
-		set ${1} ${2} perf # user build uses perf kernel artifacts, ${3} now set to perf
-		sed -i "s/USER_VARIANT:=.*/USER_VARIANT:=1/" target/linux/${1}/Makefile || return 1
-	fi
-	#**********************************************************************
 
 	# Dynamically set/update KERNEL_PLATFORM_TARGET in ${1}/Makefile accordingly based on ${2}=kp_target argument
 	# Variable will be used to consume the right kp_artifacts in build.py sequence of configuration & build
 	sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${2}/" target/linux/${1}/Makefile || return 1
-
-	# Dynamically set/update TARGET_VARIANT in ${1}/Makefile accordingly based on ${3}=kp_variant argument
-	# Variable will be used to consume the right kp_artifacts in build.py sequence of configuration & build
-	sed -i "s/TARGET_VARIANT:=.*/TARGET_VARIANT:=${3}/" target/linux/${1}/Makefile || return 1
+	set_kernel_variant ${1} ${3}
 }
 
 # plain kernel platform build, takes as arguments sdx_target, kp_target and kp_variant
@@ -334,9 +345,24 @@ function configure(){
 		fi
 	fi
 
+	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
+	# 	use case: build_all.sh in automation
+	# --> non-recovery profiles case:
+	#	set both: KERNEL_PLATFORM_TARGET & TARGET_VARIANT via set_kernel_target(sdx_target,kp_target,kp_variant) invocation
+	#	all non-recovery profiles are associated to a respective kernel config
+	# --> recovery profile case:
+	#	set TARGET_VARIANT only via set_kernel_variant(sdx_target,kp_variant) invocation, do NOT set KERNEL_PLATFORM_TARGET
+	#	standalone recovery profile is not associated to ANY kernel config
+	#	standalone recovery build via configure utilizes KERNEL_PLATFORM_TARGET value in sdx_target/Makefile
+	#NOTE:
+	# redundant logic for build.py usage; can be safely removed once transition to build.py is complete
+	# 	in build.py KERNEL_PLATFORM_TARGET & TARGET_VARIANT are set prior to any profile configuration
 	if [ "${2}" != "recovery" ]; then
-		sed -i "s/KERNEL_PLATFORM_TARGET:=.*/KERNEL_PLATFORM_TARGET:=${TARGET}/" target/linux/${1}/Makefile || return
+		set_kernel_target ${1} ${TARGET} ${3} || return 1
+	else
+		set_kernel_variant ${1} ${3} || return 1
 	fi
+
 	#Add check to differentiate between local builds and crm builds
 	if [ -z "${4}" ] || [ "${4}" != "disable_kernel" ]; then
 		build_kernel ${1} ${3} || return 1
