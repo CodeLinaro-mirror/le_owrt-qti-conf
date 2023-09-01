@@ -186,3 +186,32 @@ if args.target == 'sdx75':
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
         build(args.profile)
+
+# ------------------------ complete build sequence for sdx35 target ---------------------------------
+if args.target == 'sdx35':
+    if args.automation == 'false':
+        # local build
+        if args.profile == 'mbb' or args.profile == 'm2':
+            build_kernel_platform(args.target, 'sdxbaagha', args.variant)  # build kernel with sdxbaagha configuration
+        elif args.profile == 'mbb-128m':
+            build_kernel_platform(args.target, 'sdxbaagha-128m', args.variant)  # build kernel with sdxbaagha-128m configuration
+        else:
+            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+
+#       common build sequence for sdx35 profiles
+        consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
+        build('recovery')  # configure & build recovery profile
+        build(args.profile)  # configure & build args.profile profile
+    else:
+        #automation
+        if args.profile == 'mbb' or args.profile == 'm2':
+            set_kernel_target(args.target, 'sdxbaagha', args.variant)  # set kernel target for sdxbaagha configuration
+            build('recovery')
+        elif args.profile == 'mbb-128m':
+            set_kernel_target(args.target, 'sdxbaagha-128m', args.variant)  # set kernel target for sdxbaagha-128m configuration
+            build('recovery')
+        else:
+            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+        build(args.profile)
