@@ -62,7 +62,6 @@ if args.automation not in valid_automation_flags:
 def cleanup_workspace(automation):
     if automation == 'true':
         subprocess.run(['make', 'distclean'], check=True)
-        os.remove('feeds.conf')
     return
 
 cleanup_workspace(args.automation)
