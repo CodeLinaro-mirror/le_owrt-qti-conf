@@ -1,0 +1,24 @@
+From 403d120e73e399c26fd4fa29445caf54ab2cd215 Mon Sep 17 00:00:00 2001
+From: Radhika Bandichhode <quic_rbandich@quicinc.com>
+Date: Fri, 25 Aug 2023 14:50:01 +0530
+Subject: [PATCH] Add libexecinfo dependency for bind package
+
+---
+ net/bind/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/net/bind/Makefile b/net/bind/Makefile
+index 8f78b1dbca..183759e006 100644
+--- a/net/bind/Makefile
++++ b/net/bind/Makefile
+@@ -60,6 +60,7 @@ define Package/bind-libs
+ 	+libpthread \
+ 	+libatomic \
+ 	+libuv \
++	+libexecinfo \
+ 	+BIND_ENABLE_DOH:libnghttp2 \
+ 	+BIND_LIBXML2:libxml2 \
+ 	+BIND_LIBJSON:libjson-c
+-- 
+2.17.1
+
