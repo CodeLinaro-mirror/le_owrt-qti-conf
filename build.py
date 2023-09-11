@@ -25,12 +25,13 @@ TOPDIR = get_owrt_root_path()
 # Change the current working directory to the OpenWrt root path
 os.chdir(TOPDIR)
 
-# Parse the command-line arguments, assign default value for target, profile, varian, automation
+# Parse the command-line arguments, assign default value for target, profile, variant, automation, sectools_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--target', default='sdx75', help='Please specify the target to be configured & built; default --target=sdx75')
 parser.add_argument('--profile', default='mbb', help='Please specify the profile to be configured & built; default --profile=mbb')
 parser.add_argument('--variant', default='debug', help='Please specify the variant to be configured & built; default --variant=debug')
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
+parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
 args = parser.parse_args()
 
 # Validate the arguments
@@ -65,6 +66,20 @@ def cleanup_workspace(automation):
     return
 
 cleanup_workspace(args.automation)
+
+# sectools path handler for external build cases
+if os.path.exists("/pkg/sectools/v2/latest/Linux"):
+    #HY11
+    os.environ["SECTOOLS_PATH"] = "/pkg/sectools/v2/latest/Linux"
+else:
+    #customer build
+    if args.sectools_path is None:
+        print("******** SECTOOLS PATH not set ********")
+        print("Please set sectools path via --sectools_path argument before proceeding with build!")
+        exit(1)
+    else:
+        os.environ["SECTOOLS_PATH"] = args.sectools_path
+
 source_script = os.path.relpath(os.path.join(TOPDIR, 'owrt-qti-conf/set_openwrt_env.sh'))
 
 #retrieve consume_kernel_artifacts function implementation from set_openwrt_env.sh
