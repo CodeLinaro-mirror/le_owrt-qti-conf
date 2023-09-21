@@ -32,6 +32,7 @@ parser.add_argument('--profile', default='mbb', help='Please specify the profile
 parser.add_argument('--variant', default='debug', help='Please specify the variant to be configured & built; default --variant=debug')
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
 parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
+parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
 args = parser.parse_args()
 
 # Validate the arguments
@@ -165,6 +166,19 @@ def build(profile):
                 exit(1)
         exit(1)
 
+def build_kw(profile):
+    configure(args.target, profile, args.variant)
+    if profile == 'mbb':
+        subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
+    try:
+        subprocess.run(['make', '-j32'], check=True)
+    except subprocess.CalledProcessError:
+        try:
+            subprocess.run(['make', '-j1', 'V=s'], check=True)
+        except subprocess.CalledProcessError:
+            exit(0)
+        exit(0)
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75 target ---------------------------------
@@ -200,7 +214,10 @@ if args.target == 'sdx75':
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
-        build(args.profile)
+        if args.kw == 'true':
+            build_kw(args.profile)
+        else:
+            build(args.profile)
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
