@@ -79,13 +79,12 @@ else
 		make -j1 V=s
 		exit 1
 	fi
-	make clean
-	make toolchain/kernel-headers/{clean,compile}
 
 	if [ "${2}" == "mbb-128m" ]; then
 		configure ${1} ${2} ${3} || exit 1
 	else
 		configure ${1} ${2} ${3} disable_kernel || exit 1
+		make toolchain/kernel-headers/{clean,compile}
 	fi
 	make -j32
 	if [ $? -ne 0 ]; then
