@@ -246,4 +246,7 @@ if args.target == 'sdx35':
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
-        build(args.profile)
+        if args.kw == 'true':
+            build_kw(args.profile)
+        else:
+            build(args.profile)
