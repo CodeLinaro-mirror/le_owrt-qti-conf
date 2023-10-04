@@ -33,6 +33,20 @@ parser.add_argument('--variant', default='debug', help='Please specify the varia
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
 parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
 parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
+
+def validate_nthreads(value):
+    try:
+        nthreads=int(value)
+        if nthreads <= 0:
+            raise argparse.ArgumentTypeError("Value entered for number of threads must be a positive integer.")
+            exit(1)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Invalid value for --nthreads. Please provide a positive integer.")
+        exit(1)
+    return nthreads
+
+parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
+
 args = parser.parse_args()
 
 # Validate the arguments
@@ -133,7 +147,7 @@ def print_build_configuration(target, profile, variant):
 
 # further modularize configure & build calls
 # configure for args.target, profile, args.variant
-# run full build "make -j32"
+# run full build "make -jnthreads"
 # check for build status, supress unecessary traceback python logs
 # In case of overall build failure:
 # If local build (automation flag is false)
@@ -146,9 +160,9 @@ def build(profile):
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        subprocess.run(['make', '-j32'], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
-        print("'make -j32' command failed.")
+        print("make -j{} command failed.".format(args.nthreads))
         if args.automation == 'false':
             #local build
             user_input = input("Do you want to run 'make -j1 V=s' for comprehensive verbose logs on the error? ")
@@ -171,7 +185,7 @@ def build_kw(profile):
     if profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        subprocess.run(['make', '-j32'], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
         try:
             subprocess.run(['make', '-j1', 'V=s'], check=True)
