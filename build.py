@@ -8,6 +8,7 @@ import os
 import sys
 import subprocess
 import time
+import re
 
 def get_owrt_root_path():
     """Get the path to the OpenWrt build system's root directory."""
