@@ -25,12 +25,14 @@ TOPDIR = get_owrt_root_path()
 # Change the current working directory to the OpenWrt root path
 os.chdir(TOPDIR)
 
-# Parse the command-line arguments, assign default value for target, profile, varian, automation
+# Parse the command-line arguments, assign default value for target, profile, variant, automation, sectools_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--target', default='sdx75', help='Please specify the target to be configured & built; default --target=sdx75')
 parser.add_argument('--profile', default='mbb', help='Please specify the profile to be configured & built; default --profile=mbb')
 parser.add_argument('--variant', default='debug', help='Please specify the variant to be configured & built; default --variant=debug')
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
+parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
+parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
 args = parser.parse_args()
 
 # Validate the arguments
@@ -65,6 +67,20 @@ def cleanup_workspace(automation):
     return
 
 cleanup_workspace(args.automation)
+
+# sectools path handler for external build cases
+if os.path.exists("/pkg/sectools/v2/latest/Linux"):
+    #HY11
+    os.environ["SECTOOLS_PATH"] = "/pkg/sectools/v2/latest/Linux"
+else:
+    #customer build
+    if args.sectools_path is None:
+        print("******** SECTOOLS PATH not set ********")
+        print("Please set sectools path via --sectools_path argument before proceeding with build!")
+        exit(1)
+    else:
+        os.environ["SECTOOLS_PATH"] = args.sectools_path
+
 source_script = os.path.relpath(os.path.join(TOPDIR, 'owrt-qti-conf/set_openwrt_env.sh'))
 
 #retrieve consume_kernel_artifacts function implementation from set_openwrt_env.sh
@@ -150,6 +166,19 @@ def build(profile):
                 exit(1)
         exit(1)
 
+def build_kw(profile):
+    configure(args.target, profile, args.variant)
+    if profile == 'mbb':
+        subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
+    try:
+        subprocess.run(['make', '-j32'], check=True)
+    except subprocess.CalledProcessError:
+        try:
+            subprocess.run(['make', '-j1', 'V=s'], check=True)
+        except subprocess.CalledProcessError:
+            exit(0)
+        exit(0)
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75 target ---------------------------------
@@ -185,4 +214,39 @@ if args.target == 'sdx75':
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
-        build(args.profile)
+        if args.kw == 'true':
+            build_kw(args.profile)
+        else:
+            build(args.profile)
+
+# ------------------------ complete build sequence for sdx35 target ---------------------------------
+if args.target == 'sdx35':
+    if args.automation == 'false':
+        # local build
+        if args.profile == 'mbb' or args.profile == 'm2':
+            build_kernel_platform(args.target, 'sdxbaagha', args.variant)  # build kernel with sdxbaagha configuration
+        elif args.profile == 'mbb-128m':
+            build_kernel_platform(args.target, 'sdxbaagha-128m', args.variant)  # build kernel with sdxbaagha-128m configuration
+        else:
+            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+
+#       common build sequence for sdx35 profiles
+        consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
+        build('recovery')  # configure & build recovery profile
+        build(args.profile)  # configure & build args.profile profile
+    else:
+        #automation
+        if args.profile == 'mbb' or args.profile == 'm2':
+            set_kernel_target(args.target, 'sdxbaagha', args.variant)  # set kernel target for sdxbaagha configuration
+            build('recovery')
+        elif args.profile == 'mbb-128m':
+            set_kernel_target(args.target, 'sdxbaagha-128m', args.variant)  # set kernel target for sdxbaagha-128m configuration
+            build('recovery')
+        else:
+            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+        if args.kw == 'true':
+            build_kw(args.profile)
+        else:
+            build(args.profile)

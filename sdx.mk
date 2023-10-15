@@ -34,10 +34,10 @@ endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
 
-UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping
+UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping iperf3
 
 COREBSP_UTILS:=pm-utils
 
 ifeq ($(EXTERNAL_BUILD),1)
-QTIDATAPROP += xmllib_prebuilt libnetmgr_rmnet_ext_prebuilt
+QTIBSPPROP += xmllib_prebuilt
 endif
