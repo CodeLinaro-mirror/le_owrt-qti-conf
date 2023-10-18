@@ -319,6 +319,7 @@ if args.target == 'sdx35':
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
 #       common build sequence for sdx35 profiles
+        make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
         build(args.profile)  # configure & build args.profile profile
