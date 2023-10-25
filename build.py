@@ -254,10 +254,7 @@ def build_kw(profile):
     if profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        if args.target == 'sdx35':
-            subprocess.run(['make', '-j1', 'V=s'], check=True)
-        else:
-            subprocess.run(['make', '-j', str(args.nthreads)], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
         try:
             subprocess.run(['make', '-j1', 'V=s'], check=True)
