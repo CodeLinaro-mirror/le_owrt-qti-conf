@@ -8,6 +8,7 @@ import os
 import sys
 import subprocess
 import time
+import re
 
 def get_owrt_root_path():
     """Get the path to the OpenWrt build system's root directory."""
@@ -33,6 +34,20 @@ parser.add_argument('--variant', default='debug', help='Please specify the varia
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
 parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
 parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
+
+def validate_nthreads(value):
+    try:
+        nthreads=int(value)
+        if nthreads <= 0:
+            raise argparse.ArgumentTypeError("Value entered for number of threads must be a positive integer.")
+            exit(1)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Invalid value for --nthreads. Please provide a positive integer.")
+        exit(1)
+    return nthreads
+
+parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
+
 args = parser.parse_args()
 
 # Validate the arguments
@@ -67,6 +82,74 @@ def cleanup_workspace(automation):
     return
 
 cleanup_workspace(args.automation)
+
+def make_clean(target):
+    try:
+        # Open and read the owrt/.config file
+        config_file_path = '{}/.config'.format(TOPDIR)
+        with open(config_file_path, 'r') as config_file:
+            config_contents = config_file.read()
+
+        # Use regular expressions to extract the value of CONFIG_TARGET_PROFILE
+        match_profile = re.search(r'CONFIG_TARGET_PROFILE="([^"]+)"', config_contents)
+
+        if match_profile:
+            OLD_PROFILE = match_profile.group(1)
+        else:
+            # Workspace environment not previously configured for build
+            return None
+
+    except FileNotFoundError as e:
+        # Workspace environment not previously configured for build
+        return None
+
+    # ------------------------------------------------------------------------
+    try:
+        # Open and read the owrt/target/linux/{target}/Makefile
+        target_makefile_path = '{}/target/linux/{}/Makefile'.format(TOPDIR,target)
+        with open(target_makefile_path, 'r') as target_makefile:
+            target_makefile_contents = target_makefile.read()
+
+        # Use regular expressions to extract the value of TARGET_VARIANT & USER flag
+        match_variant = re.search(r'TARGET_VARIANT:=([^"\n]+)', target_makefile_contents)
+        match_user_build = re.search(r'USER_VARIANT:=([^"\n]+)', target_makefile_contents)
+
+        if match_variant:
+            OLD_VARIANT = match_variant.group(1)
+        else:
+            return None
+
+        if match_user_build:
+            OLD_USER_FLAG = match_user_build.group(1)
+        else:
+            return None
+
+    except FileNotFoundError as e:
+        # Workspace environment not previously configured for build
+        return None
+
+    # Make clean state machine / logic
+    need_clean = False
+    if args.variant == 'user' and OLD_USER_FLAG == '0':
+        # Previous build was not a user build, new build requested is user, run make clean
+        need_clean = True
+    elif args.variant == 'user' and OLD_USER_FLAG == '1':
+        # Previous build was a user build, new build requested is user, no make clean
+        need_clean = False
+    elif args.variant == 'perf' and OLD_USER_FLAG == '1':
+        # Previous build was a user build, new build requested is perf, run make clean
+        need_clean = True
+    elif args.profile != OLD_PROFILE or args.variant != OLD_VARIANT:
+        # All other cases: check for difference in profile or difference in variant (debug vs perf)
+        need_clean = True
+    else:
+        need_clean = False
+
+    if need_clean:
+        print("Different configuration parameter/s detected, running 'make clean' before issuing build with the new paramters.")
+        subprocess.run(['make', 'clean'], check=True)
+    else:
+        return None
 
 # sectools path handler for external build cases
 if os.path.exists("/pkg/sectools/v2/latest/Linux"):
@@ -133,7 +216,7 @@ def print_build_configuration(target, profile, variant):
 
 # further modularize configure & build calls
 # configure for args.target, profile, args.variant
-# run full build "make -j32"
+# run full build "make -jnthreads"
 # check for build status, supress unecessary traceback python logs
 # In case of overall build failure:
 # If local build (automation flag is false)
@@ -146,9 +229,9 @@ def build(profile):
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        subprocess.run(['make', '-j32'], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
-        print("'make -j32' command failed.")
+        print("make -j{} command failed.".format(args.nthreads))
         if args.automation == 'false':
             #local build
             user_input = input("Do you want to run 'make -j1 V=s' for comprehensive verbose logs on the error? ")
@@ -171,7 +254,7 @@ def build_kw(profile):
     if profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        subprocess.run(['make', '-j32'], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
         try:
             subprocess.run(['make', '-j1', 'V=s'], check=True)
@@ -196,6 +279,7 @@ if args.target == 'sdx75':
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
 #       common build sequence for sdx75 profiles
+        make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
         build(args.profile)  # configure & build args.profile profile
@@ -232,6 +316,7 @@ if args.target == 'sdx35':
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
 #       common build sequence for sdx35 profiles
+        make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
         build(args.profile)  # configure & build args.profile profile
