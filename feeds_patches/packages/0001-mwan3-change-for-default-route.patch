@@ -1,4 +1,4 @@
-From 593e728bef6a6548474a2f25d9a55902b5d65b2f Mon Sep 17 00:00:00 2001
+From 0ab8f567399a01d1071bd50e17ae5381202ab262 Mon Sep 17 00:00:00 2001
 From: HuaWen CHEN <quic_huawenc@quicinc.com>
 Date: Mon, 18 Sep 2023 16:12:04 +0800
 Subject: [PATCH] mwan3: change for default route
@@ -8,8 +8,8 @@ to support only one default route in main table:
 2. ip monitor route handling, skip the default route change.
 ---
  net/mwan3/files/lib/mwan3/mwan3.sh  |  5 ++-
- net/mwan3/files/usr/sbin/mwan3rtmon | 57 ++++++++++++++++++++++++++---
- 2 files changed, 56 insertions(+), 6 deletions(-)
+ net/mwan3/files/usr/sbin/mwan3rtmon | 52 ++++++++++++++++++++++++++---
+ 2 files changed, 51 insertions(+), 6 deletions(-)
 
 diff --git a/net/mwan3/files/lib/mwan3/mwan3.sh b/net/mwan3/files/lib/mwan3/mwan3.sh
 index 1bfb767e86..0ae2554197 100644
@@ -43,10 +43,10 @@ index 1bfb767e86..0ae2554197 100644
  
  	tbl=$($IP route list table $id 2>/dev/null)$'\n'
 diff --git a/net/mwan3/files/usr/sbin/mwan3rtmon b/net/mwan3/files/usr/sbin/mwan3rtmon
-index b7f03cc874..c2f6074d88 100755
+index b7f03cc874..c9970aef64 100755
 --- a/net/mwan3/files/usr/sbin/mwan3rtmon
 +++ b/net/mwan3/files/usr/sbin/mwan3rtmon
-@@ -69,10 +69,16 @@ mwan3_add_all_routes()
+@@ -69,6 +69,7 @@ mwan3_add_all_routes()
  mwan3_rtmon_route_handle()
  {
  	local action route_line family tbl device line tid
@@ -54,16 +54,7 @@ index b7f03cc874..c2f6074d88 100755
  
  	route_line=${1##"Deleted "}
  	route_family=$2
- 
-+#	if [ "$isFromPipe" == "0" ] && [[ "$route_line" =~ ^default.* ]]; then
-+#	  LOG warn "mwan3rtmon skip default route change in main table (default route maintained seperatly)"
-+#	  return
-+#	fi
-+
- 	if [ "$route_line" = "$1" ]; then
- 		action="replace"
- 		$IPS -! add mwan3_connected_${route_family##ip} ${route_line%% *}
-@@ -135,9 +141,25 @@ mwan3_rtmon_route_handle()
+@@ -135,9 +136,25 @@ mwan3_rtmon_route_handle()
  	fi
  }
  
@@ -90,7 +81,7 @@ index b7f03cc874..c2f6074d88 100755
  
  	mwan3_init
  
-@@ -149,9 +171,18 @@ main()
+@@ -149,9 +166,18 @@ main()
  			exit 1
  		fi
  		IP="$IP6"
@@ -100,16 +91,16 @@ index b7f03cc874..c2f6074d88 100755
  		IP="$IP4"
 +		defaultRoutePipe="/tmp/default.route.v4.pipe"
 +		default_route_file="/tmp/default.route.v4.list"
-+	fi
+ 	fi
 +
 +	if [ ! -f $defaultRoutePipe ]; then
 +	  mkfifo $defaultRoutePipe
- 	fi
++	fi
 +
  	sh -c "echo \$\$; exec $IP monitor route" | {
  		read -r monitor_pid
  		trap_with_arg func_trap "$monitor_pid" SIGINT SIGTERM SIGKILL
-@@ -159,14 +190,30 @@ main()
+@@ -159,14 +185,30 @@ main()
  		while IFS='' read -r line; do
  			[ -z "${line##*table*}" ] && continue
  			LOG debug "handling route update $family '$line'"
