@@ -1,0 +1,28 @@
+From 11540e59b72ecc084c38d950deecf337cb325db9 Mon Sep 17 00:00:00 2001
+From: HuaWen CHEN <quic_huawenc@quicinc.com>
+Date: Thu, 9 Nov 2023 23:08:33 +0800
+Subject: [PATCH] mwan3: fix bug ipset add failure
+
+in opensoure, mwan3 cconnected ipset was renamed
+from mwan3_connected_v4 to mwan3_connected_ipv4.
+but mwan3rtmon miss the change.
+---
+ net/mwan3/files/usr/sbin/mwan3rtmon | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/mwan3/files/usr/sbin/mwan3rtmon b/net/mwan3/files/usr/sbin/mwan3rtmon
+index c9970aef64..0726f6eb8a 100755
+--- a/net/mwan3/files/usr/sbin/mwan3rtmon
++++ b/net/mwan3/files/usr/sbin/mwan3rtmon
+@@ -76,7 +76,7 @@ mwan3_rtmon_route_handle()
+ 
+ 	if [ "$route_line" = "$1" ]; then
+ 		action="replace"
+-		$IPS -! add mwan3_connected_${route_family##ip} ${route_line%% *}
++		$IPS -! add mwan3_connected_${route_family} ${route_line%% *}
+ 	else
+ 		action="del"
+ 		mwan3_set_connected_${route_family}
+-- 
+2.40.0.windows.1
+
