@@ -254,10 +254,7 @@ def build_kw(profile):
     if profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        if args.target == 'sdx35':
-            subprocess.run(['make', '-j1', 'V=s'], check=True)
-        else:
-            subprocess.run(['make', '-j', str(args.nthreads)], check=True)
+        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
         try:
             subprocess.run(['make', '-j1', 'V=s'], check=True)
@@ -319,6 +316,7 @@ if args.target == 'sdx35':
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
 #       common build sequence for sdx35 profiles
+        make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
         build(args.profile)  # configure & build args.profile profile

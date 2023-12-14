@@ -298,6 +298,15 @@ function configure(){
 	echo "Target:  ${1}"
 	echo "Profile: ${2}"
 	echo "Variant: ${3}"
+	## Add a mechanism to pass BOARD variable for use in feeds update, while scanning owrt Makefile
+	local TARGET_NAME=${1}
+	grep -q "BOARD=" include/package.mk;
+	if [ $? -ne 0 ]
+	then
+		sed -i '1s/^/BOARD='$TARGET_NAME'\n/' include/package.mk;
+	else
+		sed -i 's/BOARD=.*/BOARD='$TARGET_NAME'/g' include/package.mk;
+	fi
 	set_up_feeds || return 1
 	patch_upstream_feeds || return 1
 	rm -rf .config
