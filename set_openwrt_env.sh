@@ -115,6 +115,23 @@ function patch_upstream_feeds(){
 	cd $TOPDIR
 }
 
+function patch_openssl(){
+	OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
+#	if [ "${1}" == "sdx75" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
+#		OPENSSL_VERSION=3.0.10
+#		cd $TOPDIR/package/libs
+#		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
+#		cd $TOPDIR
+#	fi
+	grep -q "OPENSSL_VERSION:=" include/package.mk;
+	if [ $? -ne 0 ]
+	then
+		sed -i '1s/^/OPENSSL_VERSION:='$OPENSSL_VERSION'\n/' include/package.mk;
+	else
+		sed -i 's/OPENSSL_VERSION:=.*/OPENSSL_VERSION:='$OPENSSL_VERSION'/g' include/package.mk;
+	fi
+}
+
 verify_target_configuration(){
 
 	CHECK_TARGET=$(grep -x "CONFIG_TARGET_${1}=y" ".config")
@@ -309,6 +326,7 @@ function configure(){
 	fi
 	set_up_feeds || return 1
 	patch_upstream_feeds || return 1
+	patch_openssl ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
