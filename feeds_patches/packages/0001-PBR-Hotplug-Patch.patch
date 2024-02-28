@@ -1,0 +1,119 @@
+From 67498618b08904a3ec0dec880b547fb45c8f335d Mon Sep 17 00:00:00 2001
+From: aryamali <quic_aryamali@quicinc.com>
+Date: Mon, 13 Nov 2023 23:29:59 +0000
+Subject: [PATCH] PBR Hotplug Patch
+
+Signed-off-by: aryamali <quic_aryamali@quicinc.com>
+---
+ net/pbr/Makefile                         |  2 +-
+ net/pbr/files/etc/config/pbr.iptables    | 31 +++++++-----------------
+ net/pbr/files/etc/hotplug.d/iface/71-pbr | 24 ++++++++++++++++++
+ net/pbr/files/etc/init.d/pbr.init        |  2 +-
+ 4 files changed, 35 insertions(+), 24 deletions(-)
+ create mode 100644 net/pbr/files/etc/hotplug.d/iface/71-pbr
+
+diff --git a/net/pbr/Makefile b/net/pbr/Makefile
+index 10bb3fe53b..e04565203e 100644
+--- a/net/pbr/Makefile
++++ b/net/pbr/Makefile
+@@ -76,7 +76,7 @@ define Package/pbr/default/install
+ 	$(SED) "s|^\(readonly PKG_VERSION\).*|\1='$(PKG_VERSION)-$(PKG_RELEASE)'|" $(1)/etc/init.d/pbr
+ 	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
+ 	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+-	$(INSTALL_DATA) ./files/etc/hotplug.d/iface/70-pbr $(1)/etc/hotplug.d/iface/70-pbr
++	$(INSTALL_DATA) ./files/etc/hotplug.d/iface/71-pbr $(1)/etc/hotplug.d/iface/70-pbr
+ 	$(INSTALL_DIR) $(1)/etc/uci-defaults
+ 	$(INSTALL_BIN)  ./files/etc/uci-defaults/90-pbr $(1)/etc/uci-defaults/90-pbr
+ 	$(INSTALL_DIR) $(1)/usr/share/pbr
+diff --git a/net/pbr/files/etc/config/pbr.iptables b/net/pbr/files/etc/config/pbr.iptables
+index c627126442..d7ccd8cbad 100644
+--- a/net/pbr/files/etc/config/pbr.iptables
++++ b/net/pbr/files/etc/config/pbr.iptables
+@@ -4,8 +4,15 @@ config pbr 'config'
+ 	option strict_enforcement '1'
+ 	option resolver_set 'dnsmasq.ipset'
+ 	option ipv6_enabled '0'
+-	list ignored_interface 'vpnserver'
+-	list ignored_interface 'wgserver'
++	list ignored_interface 'wan_v6'
++	list ignored_interface 'waneth'
++	list ignored_interface 'waneth_v6'
++	list ignored_interface 'wanwlan'
++	list ignored_interface 'wanwlan_v6'
++	list ignored_interface 'wanbt'
++	list ignored_interface 'wanbt_v6'
++	list ignored_interface 'wanusb'
++	list ignored_interface 'wanusb_v6'
+ 	option boot_timeout '30'
+ 	option rule_create_option 'add'
+ 	option procd_reload_delay '1'
+@@ -23,23 +30,3 @@ config include
+ config include
+ 	option path '/usr/share/pbr/pbr.user.netflix'
+ 	option enabled 0
+-
+-config policy
+-	option name 'Plex/Emby Local Server'
+-	option interface 'wan'
+-	option src_port '8096 8920 32400'
+-	option enabled '0'
+-
+-config policy
+-	option name 'Plex/Emby Remote Servers'
+-	option interface 'wan'
+-	option dest_addr 'plex.tv my.plexapp.com emby.media app.emby.media tv.emby.media'
+-	option enabled '0'
+-
+-config policy
+-	option name 'WireGuard Server'
+-	option interface 'wan'
+-	option src_port '51820'
+-	option chain 'OUTPUT'
+-	option proto 'udp'
+-	option enabled '0'
+diff --git a/net/pbr/files/etc/hotplug.d/iface/71-pbr b/net/pbr/files/etc/hotplug.d/iface/71-pbr
+new file mode 100644
+index 0000000000..3e088f7f60
+--- /dev/null
++++ b/net/pbr/files/etc/hotplug.d/iface/71-pbr
+@@ -0,0 +1,24 @@
++#!/bin/sh
++
++#source pbr file
++. /etc/data/qcmapPbrConfig.sh
++
++if [ -x /etc/init.d/pbr ] && [ $(uci get pbr.config.enabled) = "1" ]; then
++        if echo $INTERFACE | grep wan; then
++                num_rmnet=$(grep rmnet /tmp/state/network -c)
++                if echo $ACTION | grep ifup; then
++                        #If addional wan coming up reload pbr
++			if [ $num_rmnet -gt 1 ]; then
++                          /etc/init.d/pbr reload
++			#If first wan coming up start pbr
++                        elif [ $num_rmnet -eq 1 ]; then
++			  /etc/data/qcmapPbrConfig.sh start_pbr
++                        fi
++                elif echo $ACTION | grep ifdown; then
++			#If last wan going down stop pbr
++                        if [ $num_rmnet -eq 0 ]; then
++			  /etc/data/qcmapPbrConfig.sh stop_pbr
++                        fi
++                fi
++        fi
++fi
+diff --git a/net/pbr/files/etc/init.d/pbr.init b/net/pbr/files/etc/init.d/pbr.init
+index 02c77f1c83..0f67eda166 100755
+--- a/net/pbr/files/etc/init.d/pbr.init
++++ b/net/pbr/files/etc/init.d/pbr.init
+@@ -264,7 +264,7 @@ is_service_running_nft() { [ -x "$nft" ] && [ -n "$(get_mark_nft_chains)" ]; }
+ # is_service_running_nft() { [ -x "$nft" ] && [ -s "$nftPermFile" ]; }
+ is_service_running() { if is_nft; then is_service_running_nft; else is_service_running_iptables; fi; }
+ is_netifd_table() { local iface="$1"; [ "$(uci -q get "network.${iface}.ip4table")" = "${packageName}_${iface%6}" ]; }
+-get_rt_tables_id() { local iface="$1"; grep "${packageName}_${iface}" '/etc/iproute2/rt_tables' | awk '{print $1;}'; }
++get_rt_tables_id() { local iface="$1"; grep -w "${packageName}_${iface}" '/etc/iproute2/rt_tables' | awk '{print $1;}'; }
+ get_rt_tables_next_id() { echo "$(($(sort -r -n '/etc/iproute2/rt_tables' | grep -o -E -m 1 "^[0-9]+")+1))"; }
+ _check_config() { local en; config_get_bool en "$1" 'enabled' 1; [ "$en" -gt 0 ] && _cfg_enabled=0; }
+ is_config_enabled() {
+-- 
+2.17.1
+
