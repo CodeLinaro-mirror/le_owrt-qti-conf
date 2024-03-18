@@ -335,14 +335,19 @@ function configure(){
 		sed -i 's/BOARD=.*/BOARD='$TARGET_NAME'/g' include/package.mk;
 	fi
 
-	## Add owrt version info in Makefile
-	grep -q "OWRT_VERSION:=" target/linux/${1}/Makefile;
-	if [ $? -ne 0 ]
-	then
-		sed -i '1s/^/OWRT_VERSION:='$OWRT_VERSION'\n/' target/linux/${1}/Makefile;
-	else
-		sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' target/linux/${1}/Makefile;
-	fi
+	echo "OWRT_VERSION: $OWRT_VERSION"
+	## Add owrt version info in Makefile and package.mk
+	files_to_add_owrt_ver=("target/linux/${1}/Makefile" "include/package.mk")
+	for files_to_update in ${files_to_add_owrt_ver[@]};
+	do
+		grep -q "OWRT_VERSION:=" $files_to_update
+		if [ $? -ne 0 ]
+		then
+			sed -i '1s/^/OWRT_VERSION:='$OWRT_VERSION'\n/' $files_to_update
+		else
+			sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' $files_to_update
+		fi
+	done
 
 	set_up_feeds || return 1
 	patch_upstream_feeds || return 1
