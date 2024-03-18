@@ -1,0 +1,39 @@
+From 62d9e4bc595326d59eacc2de2ace9672efdf84cc Mon Sep 17 00:00:00 2001
+From: Jia Ding <quic_jiad@quicinc.com>
+Date: Sun, 17 Mar 2024 19:29:52 -0700
+Subject: [PATCH] FreeRadius: Add neceesary lib and ignore unnecessary eap
+ method
+
+Add necessary lib libexecinfo.so to compile freeradius3-common
+module, ignore unnecessary eap method lib rlm_eap pwd.so when
+compile freeradius3-default module on SDK75.
+
+Signed-off-by: Jiad Ding<quic_jiad@quicinc.com>
+---
+ net/freeradius3/Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/net/freeradius3/Makefile b/net/freeradius3/Makefile
+index 6939f85f42..63df15df1d 100644
+--- a/net/freeradius3/Makefile
++++ b/net/freeradius3/Makefile
+@@ -63,7 +63,7 @@ endef
+ define Package/freeradius3-common
+   $(call Package/freeradius3/Default)
+   TITLE:=common files
+-  DEPENDS:=+USE_GLIBC:libpthread +USE_GLIBC:libbsd +FREERADIUS3_OPENSSL:libopenssl +libcap +libpcap +libncurses +libreadline +libtalloc +libatomic
++  DEPENDS:=+USE_GLIBC:libpthread +USE_GLIBC:libbsd +FREERADIUS3_OPENSSL:libopenssl +libcap +libpcap +libncurses +libreadline +libtalloc +libatomic +libexecinfo
+ endef
+ 
+ define Package/freeradius3-default
+@@ -508,6 +508,7 @@ CONFIGURE_ARGS+= \
+ 	--without-rlm_eap_ikev2 \
+ 	--without-rlm_eap_sim \
+ 	--without-rlm_eap_tnc \
++	--without-rlm_eap_pwd \
+ 	--without-rlm_example \
+ 	--without-rlm_idn \
+ 	--without-rlm_ippool \
+-- 
+2.17.1
+
