@@ -130,12 +130,12 @@ function patch_openssl(){
 		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
 	fi
 
-#	if [ "${1}" == "sdx75" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
-#		OPENSSL_VERSION=3.0.10
-#		cd $TOPDIR/package/libs
-#		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
-#		cd $TOPDIR
-#	fi
+	if [ "${1}" == "sdx75" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
+		OPENSSL_VERSION=3.0.10
+		cd $TOPDIR/package/libs
+		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
+		cd $TOPDIR
+	fi
 	grep -q "OPENSSL_VERSION:=" include/package.mk;
 	if [ $? -ne 0 ]
 	then
