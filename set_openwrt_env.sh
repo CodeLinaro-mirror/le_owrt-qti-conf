@@ -34,11 +34,12 @@
 
 TOPDIR=$(pwd)
 
+OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
-unlink $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor
-mkdir -p $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor
-/bin/cp -rp $TOPDIR/src/kernel-5.15/kernel_platform/qcom/proprietary/devicetree/* $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor/
+if (( "${OWRT_VERSION%%.*}"=="23")); then
+	/bin/cp $TOPDIR/owrt-qti-conf/V23/feeds.conf $TOPDIR
+fi
 
 cd $TOPDIR
 umask 022
@@ -85,9 +86,13 @@ function set_up_feeds(){
 }
 
 function patch_upstream_feeds(){
+	echo "Using feeds for Openwrt version:$OWRT_VERSION"
 	feeds=(packages luci routing)
 	feeds_path=$TOPDIR/feeds
 	patches=$TOPDIR/owrt-qti-conf/feeds_patches
+	if (( "${OWRT_VERSION%%.*}"=="23")); then
+		patches=$TOPDIR/owrt-qti-conf/V23/feeds_patches
+	fi
 	for feed in ${feeds[@]}; do
 		for patch in $patches/$feed/*.patch; do
 			cd $feeds_path/$feed
@@ -116,7 +121,12 @@ function patch_upstream_feeds(){
 }
 
 function patch_openssl(){
-	OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
+	if (( "${OWRT_VERSION%%.*}"=="23")); then
+		OPENSSL_VERSION=$(sed -n -e '/PKG_VERSION:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
+	else
+		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
+	fi
+
 	if [ "${1}" == "sdx75" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
 		OPENSSL_VERSION=3.0.10
 		cd $TOPDIR/package/libs
@@ -324,6 +334,16 @@ function configure(){
 	else
 		sed -i 's/BOARD=.*/BOARD='$TARGET_NAME'/g' include/package.mk;
 	fi
+
+	## Add owrt version info in Makefile
+	grep -q "OWRT_VERSION:=" target/linux/${1}/Makefile;
+	if [ $? -ne 0 ]
+	then
+		sed -i '1s/^/OWRT_VERSION:='$OWRT_VERSION'\n/' target/linux/${1}/Makefile;
+	else
+		sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' target/linux/${1}/Makefile;
+	fi
+
 	set_up_feeds || return 1
 	patch_upstream_feeds || return 1
 	patch_openssl ${1} || return 1
