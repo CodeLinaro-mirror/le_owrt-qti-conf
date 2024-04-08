@@ -142,6 +142,23 @@ function patch_openssl(){
 	fi
 }
 
+function update_configs(){
+	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ] && [ -f "owrt-qti-conf/V23/${1}/${2}.config" ]; then
+		IFS='='
+		#read line by line from owrt-qti-conf/V23/${1}/${2}.config
+		while read -r line; do
+			read -a configarr <<<"$line"
+			if grep  "${configarr[0]}=" ".config"
+			then
+				# if found
+				sed -i "s/${configarr[0]}=.*/$line/" .config
+			else
+				echo "$line" >> ".config"
+			fi
+		done < "owrt-qti-conf/V23/${1}/${2}.config"
+	fi
+}
+
 verify_target_configuration(){
 
 	CHECK_TARGET=$(grep -x "CONFIG_TARGET_${1}=y" ".config")
@@ -355,6 +372,7 @@ function configure(){
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
+	update_configs ${1} ${2} || return
 
 	#Create separate rootfs for recovery profile
 	if [ "${2}" == "recovery" ]; then
