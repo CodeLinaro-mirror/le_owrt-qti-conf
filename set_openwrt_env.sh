@@ -83,6 +83,11 @@ function set_up_feeds(){
 	rm -rf feeds
 	./scripts/feeds update -a || return
 	./scripts/feeds install -a || return
+	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ]; then
+		./scripts/feeds uninstall bash || return
+		./scripts/feeds uninstall xz || return
+		./scripts/feeds install -a -f -p qtigplv2 || return
+	fi
 }
 
 function patch_upstream_feeds(){
@@ -366,7 +371,7 @@ function configure(){
 		fi
 	done
 
-	set_up_feeds || return 1
+	set_up_feeds ${1} || return 1
 	patch_upstream_feeds || return 1
 	patch_openssl ${1} || return 1
 	rm -rf .config
