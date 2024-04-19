@@ -47,6 +47,7 @@ def validate_nthreads(value):
     return nthreads
 
 parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
+parser.add_argument('--logging', default='false', help='Please specify wether to build with verbose enabled (V=s), can be used with --nthreads; default --logging=false')
 
 args = parser.parse_args()
 
@@ -57,6 +58,7 @@ valid_profiles['sdx75'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
+valid_logging = ['false','true']
 
 if args.target not in valid_targets:
     print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
@@ -73,6 +75,10 @@ if args.variant not in valid_variants:
 
 if args.automation not in valid_automation_flags:
     print("Invalid automation flag '{}'. Valid automation flags are: {}".format(args.automation, ', '.join(valid_automation_flags)))
+    exit(1)
+
+if args.logging not in valid_logging:
+    print("Invalid logging options '{}'. Valid logging options are: {}".format(args.automation, ', '.join(valid_automation_flags)))
     exit(1)
 
 # Fresh/distclean-ed workspace required for automation
@@ -229,7 +235,10 @@ def build(profile):
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
-        subprocess.run(['make', '-j', str(args.nthreads)], check=True)
+        if args.logging == 'true':
+            subprocess.run(['make', '-j', str(args.nthreads), 'V=s'], check=True)
+        else:
+            subprocess.run(['make', '-j', str(args.nthreads)], check=True)
     except subprocess.CalledProcessError:
         print("make -j{} command failed.".format(args.nthreads))
         if args.automation == 'false':
