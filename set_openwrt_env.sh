@@ -83,6 +83,11 @@ function set_up_feeds(){
 	rm -rf feeds
 	./scripts/feeds update -a || return
 	./scripts/feeds install -a || return
+	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ]; then
+		./scripts/feeds uninstall bash || return
+		./scripts/feeds uninstall xz || return
+		./scripts/feeds install -a -f -p qtigplv2 || return
+	fi
 }
 
 function patch_upstream_feeds(){
@@ -139,6 +144,23 @@ function patch_openssl(){
 		sed -i '1s/^/OPENSSL_VERSION:='$OPENSSL_VERSION'\n/' include/package.mk;
 	else
 		sed -i 's/OPENSSL_VERSION:=.*/OPENSSL_VERSION:='$OPENSSL_VERSION'/g' include/package.mk;
+	fi
+}
+
+function update_configs(){
+	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ] && [ -f "owrt-qti-conf/V23/${1}/${2}.config" ]; then
+		IFS='='
+		#read line by line from owrt-qti-conf/V23/${1}/${2}.config
+		while read -r line; do
+			read -a configarr <<<"$line"
+			if grep  "${configarr[0]}=" ".config"
+			then
+				# if found
+				sed -i "s/${configarr[0]}=.*/$line/" .config
+			else
+				echo "$line" >> ".config"
+			fi
+		done < "owrt-qti-conf/V23/${1}/${2}.config"
 	fi
 }
 
@@ -335,21 +357,27 @@ function configure(){
 		sed -i 's/BOARD=.*/BOARD='$TARGET_NAME'/g' include/package.mk;
 	fi
 
-	## Add owrt version info in Makefile
-	grep -q "OWRT_VERSION:=" target/linux/${1}/Makefile;
-	if [ $? -ne 0 ]
-	then
-		sed -i '1s/^/OWRT_VERSION:='$OWRT_VERSION'\n/' target/linux/${1}/Makefile;
-	else
-		sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' target/linux/${1}/Makefile;
-	fi
+	echo "OWRT_VERSION: $OWRT_VERSION"
+	## Add owrt version info in Makefile and package.mk
+	files_to_add_owrt_ver=("target/linux/${1}/Makefile" "include/package.mk")
+	for files_to_update in ${files_to_add_owrt_ver[@]};
+	do
+		grep -q "OWRT_VERSION:=" $files_to_update
+		if [ $? -ne 0 ]
+		then
+			sed -i '1s/^/OWRT_VERSION:='$OWRT_VERSION'\n/' $files_to_update
+		else
+			sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' $files_to_update
+		fi
+	done
 
-	set_up_feeds || return 1
+	set_up_feeds ${1} || return 1
 	patch_upstream_feeds || return 1
 	patch_openssl ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
+	update_configs ${1} ${2} || return
 
 	#Create separate rootfs for recovery profile
 	if [ "${2}" == "recovery" ]; then
