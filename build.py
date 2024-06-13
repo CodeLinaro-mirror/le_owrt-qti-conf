@@ -312,6 +312,21 @@ if args.target == 'sdx75':
         else:
             build(args.profile)
 
+
+    # Generates the ddm.csv at release/ddm
+    ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
+    output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, 'sdx75', args.profile, 'ddm.csv'))  # Path to save ddm.csv
+
+    # Run the script and capture its output
+    result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+    # Write stdout to ddm.csv
+    with open(output_csv, 'w') as f_csv:
+        f_csv.write(result.stdout)
+
+    # Print the path to the saved ddm.csv
+    print(f"BIN DDM generated and saved at: {output_csv}")
+
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
     if args.automation == 'false':
