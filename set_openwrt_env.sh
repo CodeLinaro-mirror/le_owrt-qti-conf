@@ -81,7 +81,7 @@ function uname_version(){
 
 function set_up_feeds(){
 	rm -rf feeds
-	./scripts/feeds update -a || return
+	./scripts/feeds update -a -b || return
 	./scripts/feeds install -a || return
 	if [ "${OWRT_VERSION%%.*}" == "23" ]; then
 		./scripts/feeds uninstall bash || return
