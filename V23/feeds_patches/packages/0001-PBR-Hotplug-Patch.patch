@@ -1,17 +1,19 @@
-From 4558d86fdb2aa7299669f2013d513f4688bf094b Mon Sep 17 00:00:00 2001
+From 3e099aae41f9f2dff7da2bb33864a88f5c4c5552 Mon Sep 17 00:00:00 2001
 From: aryamali <quic_aryamali@quicinc.com>
 Date: Wed, 27 Mar 2024 18:21:22 +0000
-Subject: [PATCH] PBR Hotplug Patch
+Subject: [PATCH 1/1] PBR Hotplug Patch
+
 Signed-off-by: aryamali <quic_aryamali@quicinc.com>
 ---
- net/pbr/Makefile                         |  2 +-
- net/pbr/files/etc/config/pbr.iptables    | 31 +++++++-----------------
- net/pbr/files/etc/hotplug.d/iface/71-pbr | 25 ++++++++++++++++++
- net/pbr/files/etc/init.d/pbr.init        |  2 +-
- 4 files changed, 36 insertions(+), 24 deletions(-)
+ net/pbr/Makefile                         |   2 +-
+ net/pbr/files/etc/config/pbr.iptables    |  38 ++------
+ net/pbr/files/etc/hotplug.d/iface/71-pbr |  31 +++++++
+ net/pbr/files/etc/init.d/pbr.init        | 105 +++++++++++++++--------
+ 4 files changed, 108 insertions(+), 68 deletions(-)
  create mode 100644 net/pbr/files/etc/hotplug.d/iface/71-pbr
+
 diff --git a/net/pbr/Makefile b/net/pbr/Makefile
-index 10bb3fe53b..e04565203e 100644
+index 744db6ab67..b26ff71a55 100644
 --- a/net/pbr/Makefile
 +++ b/net/pbr/Makefile
 @@ -80,7 +80,7 @@ define Package/pbr/default/install
@@ -24,16 +26,15 @@ index 10bb3fe53b..e04565203e 100644
  	$(INSTALL_BIN)  ./files/etc/uci-defaults/90-pbr $(1)/etc/uci-defaults/90-pbr
  	$(INSTALL_DIR) $(1)/usr/share/pbr
 diff --git a/net/pbr/files/etc/config/pbr.iptables b/net/pbr/files/etc/config/pbr.iptables
-index c627126442..d7ccd8cbad 100644
+index c627126442..383d3f0104 100644
 --- a/net/pbr/files/etc/config/pbr.iptables
 +++ b/net/pbr/files/etc/config/pbr.iptables
-@@ -4,8 +4,15 @@ config pbr 'config'
+@@ -4,8 +4,14 @@ config pbr 'config'
  	option strict_enforcement '1'
  	option resolver_set 'dnsmasq.ipset'
  	option ipv6_enabled '0'
 -	list ignored_interface 'vpnserver'
 -	list ignored_interface 'wgserver'
-+	list ignored_interface 'wan_v6'
 +	list ignored_interface 'waneth'
 +	list ignored_interface 'waneth_v6'
 +	list ignored_interface 'wanwlan'
@@ -45,10 +46,18 @@ index c627126442..d7ccd8cbad 100644
  	option boot_timeout '30'
  	option rule_create_option 'add'
  	option procd_reload_delay '1'
-@@ -23,23 +30,3 @@ config include
- config include
- 	option path '/usr/share/pbr/pbr.user.netflix'
- 	option enabled 0
+@@ -15,31 +21,3 @@ config pbr 'config'
+ 	list webui_supported_protocol 'udp'
+ 	list webui_supported_protocol 'tcp udp'
+ 	list webui_supported_protocol 'icmp'
+-
+-config include
+-	option path '/usr/share/pbr/pbr.user.aws'
+-	option enabled 0
+-
+-config include
+-	option path '/usr/share/pbr/pbr.user.netflix'
+-	option enabled 0
 -
 -config policy
 -	option name 'Plex/Emby Local Server'
@@ -71,13 +80,14 @@ index c627126442..d7ccd8cbad 100644
 -	option enabled '0'
 diff --git a/net/pbr/files/etc/hotplug.d/iface/71-pbr b/net/pbr/files/etc/hotplug.d/iface/71-pbr
 new file mode 100644
-index 0000000000..3e088f7f60
+index 0000000000..42e7e1e580
 --- /dev/null
 +++ b/net/pbr/files/etc/hotplug.d/iface/71-pbr
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,31 @@
 +#!/bin/sh
 +#SPDX-License-Identifier: GPL-3.0-only
 +#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
++
 +#source pbr file
 +. /etc/data/qcmapPbrConfig.sh
 +
@@ -88,6 +98,7 @@ index 0000000000..3e088f7f60
 +			#If addional wan coming up reload pbr
 +			if [ $num_rmnet -gt 1 ]; then
 +				/etc/init.d/pbr reload
++				/etc/data/qcmapPbrConfig.sh delete_conntrack_on_wan_event_pbr $INTERFACE
 +			#If first wan coming up start pbr
 +			elif [ $num_rmnet -eq 1 ]; then
 +				/etc/data/qcmapPbrConfig.sh start_pbr
@@ -96,22 +107,262 @@ index 0000000000..3e088f7f60
 +			#If last wan going down stop pbr
 +			if [ $num_rmnet -eq 0 ]; then
 +				/etc/data/qcmapPbrConfig.sh stop_pbr
++			#If additional wan going down reload pbr
++			elif [ $num_rmnet -gt 0 ]; then
++				/etc/init.d/pbr reload
++				/etc/data/qcmapPbrConfig.sh delete_conntrack_on_wan_event_pbr $INTERFACE
 +			fi
 +		fi
 +	fi
 +fi
 diff --git a/net/pbr/files/etc/init.d/pbr.init b/net/pbr/files/etc/init.d/pbr.init
-index 02c77f1c83..0f67eda166 100755
+index b8c9c3d823..4ac3654961 100755
 --- a/net/pbr/files/etc/init.d/pbr.init
 +++ b/net/pbr/files/etc/init.d/pbr.init
-@@ -276,7 +276,7 @@ is_service_running_nft() { [ -x "$nft" ] && [ -n "$(get_mark_nft_chains)" ]; }
+@@ -249,7 +249,8 @@ is_tor_running() {
+ is_wg() { local proto; proto=$(uci -q get network."$1".proto); [ "${proto:0:9}" = "wireguard" ]; }
+ is_tunnel() { is_dslite "$1" || is_l2tp "$1" || is_oc "$1" || is_ovpn "$1" || is_pptp "$1" || is_softether "$1" || is_tor "$1" || is_wg "$1"; }
+ is_wan() { [ "$1" = "$wanIface4" ] || { [ "${1##wan}" != "$1" ] && [ "${1##wan6}" = "$1" ]; } || [ "${1%%wan}" != "$1" ]; }
+-is_wan6() { [ -n "$wanIface6" ] && [ "$1" = "$wanIface6" ] || [ "${1/#wan6}" != "$1" ] || [ "${1/%wan6}" != "$1" ]; }
++#Modified to correctly parse qcmap v6 wan interfaces
++is_wan6() { [ -n "$wanIface6" ] && [ "$1" = "$wanIface6" ] || [ "${1#_v6}" != "$1" ] || [ "${1%_v6}" != "$1" ]; }
+ is_ignored_interface() { str_contains_word "$ignored_interface" "$1"; }
+ is_supported_interface() { str_contains_word "$supported_interface" "$1" || { ! is_ignored_interface "$1" && { is_wan "$1" || is_wan6 "$1" || is_tunnel "$1"; }; } || is_ignore_target "$1"; }
+ is_ignore_target() { [ "$(str_to_lower "$1")" = 'ignore' ]; }
+@@ -262,7 +263,8 @@ is_ipv6_unique_local() { [ "${1:0:2}" = "fc" ] || [ "${1:0:2}" = "fd" ]; }
+ is_ipv6_global() { [ "${1:0:4}" = "2001" ]; }
+ # is_ipv6_global() { is_ipv6 "$1" && ! is_ipv6_link_local "$1" && ! is_ipv6_link_local "$1"; }
+ is_list() { str_contains "$1" "," || str_contains "$1" " "; }
+-is_netmask() { local ip="${1%/*}"; [ "$ip" != "$1" ] && is_ipv4 "$ip"; }
++#Modified to remove ipv4 check as ipv6 prefix len is also needed
++is_netmask() { local ip="${1%/*}"; [ "$ip" != "$1" ]; }
+ is_domain() { ! is_ipv6 "$1" && str_contains "$1" '[a-zA-Z]'; }
+ is_phys_dev() { [ "${1:0:1}" = "@" ] && ip l show | grep -E -q "^\\d+\\W+${1:1}"; }
+ dnsmasq_kill() { killall -q -s HUP dnsmasq; }
+@@ -276,7 +278,8 @@ is_service_running_nft() { [ -x "$nft" ] && [ -n "$(get_mark_nft_chains)" ]; }
  # is_service_running_nft() { [ -x "$nft" ] && [ -s "$nftPermFile" ]; }
  is_service_running() { if is_nft; then is_service_running_nft; else is_service_running_iptables; fi; }
  is_netifd_table() { local iface="$1"; [ "$(uci -q get "network.${iface}.ip4table")" = "${packageName}_${iface%6}" ]; }
 -get_rt_tables_id() { local iface="$1"; grep "${ipTablePrefix}_${iface}\$" '/etc/iproute2/rt_tables' | awk '{print $1;}'; }
++#Modified with -w to completely match wan iface name
 +get_rt_tables_id() { local iface="$1"; grep -w "${ipTablePrefix}_${iface}\$" '/etc/iproute2/rt_tables' | awk '{print $1;}'; }
  get_rt_tables_next_id() { echo "$(($(sort -r -n '/etc/iproute2/rt_tables' | grep -o -E -m 1 "^[0-9]+")+1))"; }
  _check_config() { local en; config_get_bool en "$1" 'enabled' 1; [ "$en" -gt 0 ] && _cfg_enabled=0; }
  is_config_enabled() {
+@@ -406,6 +409,8 @@ load_network() {
+ is_wan_up() {
+ 	local sleepCount='1'
+ 	load_network
++	#Modified to not wait for wan status, in future use procd_ignore_wan_status function instead
++	return 0
+ 	while [ -z "$wanGW" ] ; do
+ 		load_network
+ 		if [ $((sleepCount)) -gt $((boot_timeout)) ] || [ -n "$wanGW" ]; then break; fi
+@@ -1176,7 +1181,8 @@ policy_routing_iptables() {
+ 	chain="${chain:-PREROUTING}"
+ 	mark=$(eval echo "\$mark_${iface//-/_}")
+ 
+-	if [ -n "$ipv6_enabled" ] && { is_ipv6 "$laddr" || is_ipv6 "$raddr"; }; then
++	#Modified -n to -z for ipv6_enabled check as error was bring returned for ipv6 policies when ipv6_enabled option was 1
++	if [ -z "$ipv6_enabled" ] && { is_ipv6 "$laddr" || is_ipv6 "$raddr"; }; then
+ 		processPolicyError='true'
+ 		state add 'errorSummary' 'errorPolicyProcessNoIpv6' "$name"
+ 		return 1
+@@ -1342,11 +1348,11 @@ policy_routing_iptables() {
+ 		fi
+ 
+ 		local ipv4_error='0' ipv6_error='0'
+-		if [ "$param4" = "$param6" ]; then
+-			ipt4 "$param4" || ipv4_error='1'
++		#Modified to create iptable rules based on interface type as qcmap has different network interfaces for v4 and v6
++		if is_wan6 $iface; then
++			ipt6 "$param6" || ipv6_error='1'
+ 		else
+ 			ipt4 "$param4" || ipv4_error='1'
+-			ipt6 "$param6" || ipv6_error='1'
+ 		fi
+ 
+ 	if [ -n "$ipv6_enabled" ] && [ "$ipv4_error" -eq '1' ] && [ "$ipv6_error" -eq '1' ]; then
+@@ -1706,6 +1712,8 @@ interface_process_tor_nft() {
+ interface_routing() {
+ 	local action="$1" tid="$2" mark="$3" iface="$4" gw4="$5" dev="$6" gw6="$7" dev6="$8" priority="$9"
+ 	local dscp s=0 i ipv4_error=1 ipv6_error=1
++	local ifname=""
++	local dl_dscp
+ 	if [ -z "$tid" ] || [ -z "$mark" ] || [ -z "$iface" ]; then
+ 		state add 'errorSummary' 'errorInterfaceRoutingEmptyValues'
+ 		return 1
+@@ -1714,7 +1722,7 @@ interface_routing() {
+ 		create)
+ 			if is_netifd_table "$iface"; then
+ 				ipv4_error=0
+-				$ip_bin rule del table "$tid" >/dev/null 2>&1
++				$ip_bin -4 rule del table "$tid" >/dev/null 2>&1
+ 				$ip_bin -4 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" || ipv4_error=1
+ 				if is_nft; then
+ 					nft add chain inet "$nftTable" "${nftPrefix}_mark_${mark}" || ipv4_error=1 
+@@ -1727,7 +1735,8 @@ interface_routing() {
+ 				fi
+ 				if [ -n "$ipv6_enabled" ]; then
+ 					ipv6_error=0
+-					$ip_bin -6 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" || ipv6_error=1
++					$ip_bin -6 rule del table "$tid" >/dev/null 2>&1
++					$ip_bin -6 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$((priority-1))" || ipv6_error=1
+ 				fi
+ 			else
+ 				if ! grep -q "$tid ${ipTablePrefix}_${iface}" '/etc/iproute2/rt_tables'; then
+@@ -1736,14 +1745,22 @@ interface_routing() {
+ 					echo "$tid ${ipTablePrefix}_${iface}" >> '/etc/iproute2/rt_tables'
+ 					sync
+ 				fi
+-				$ip_bin rule del table "$tid" >/dev/null 2>&1
+-				$ip_bin route flush table "$tid" >/dev/null 2>&1
++				$ip_bin -4 rule del table "$tid" >/dev/null 2>&1
++				$ip_bin -4 route flush table "$tid" >/dev/null 2>&1
+ 				if [ -n "$gw4" ] || [ "$strict_enforcement" -ne 0 ]; then
+ 					ipv4_error=0
+ 					if [ -z "$gw4" ]; then
+ 						$ip_bin -4 route add unreachable default table "$tid" >/dev/null 2>&1 || ipv4_error=1
+ 					else
+-						$ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" >/dev/null 2>&1 || ipv4_error=1
++						#Modified to add per iface mtu
++						mtu=$(uci get network.$iface.mtu)
++                                               if ! is_wan6 $iface; then
++						  if [ -z $mtu ]; then
++						    $ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" >/dev/null 2>&1 || ipv4_error=1
++						  else
++						    $ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" mtu lock $mtu >/dev/null 2>&1 || ipv4_error=1
++						  fi
++						fi
+ 					fi
+ # shellcheck disable=SC2086
+ 					while read -r i; do
+@@ -1769,21 +1786,21 @@ EOF
+ 				fi
+ 				if [ -n "$ipv6_enabled" ]; then
+ 					ipv6_error=0
++					$ip_bin -6 rule del table "$tid" >/dev/null 2>&1
++					$ip_bin -6 route flush table "$tid" >/dev/null 2>&1
+ 					if { [ -n "$gw6" ] && [ "$gw6" != "::/0" ]; } || [ "$strict_enforcement" -ne 0 ]; then
+ 						if [ -z "$gw6" ] || [ "$gw6" = "::/0" ]; then
+ 							$ip_bin -6 route add unreachable default table "$tid" >/dev/null 2>&1 || ipv6_error=1
+-						elif $ip_bin -6 route list table main | grep -q " dev $dev6 "; then
+-							while read -r i; do
+-								i="$(echo "$i" | sed 's/ linkdown$//')"
+-								i="$(echo "$i" | sed 's/ onlink$//')"
+-								# shellcheck disable=SC2086
+-								$ip_bin -6 route add $i table "$tid" >/dev/null 2>&1 || ipv6_error=1
+-							done << EOF
+-							$($ip_bin -6 route list table main | grep " dev $dev6 ")
+-EOF
+ 						else
++							mtu=$(uci get network.$iface.mtu)
+ 							$ip_bin -6 route add "$($ip_bin -6 -o a show "$dev6" | awk '{print $4}')" dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
+-							$ip_bin -6 route add default dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
++							if is_wan6 $iface; then
++							  if [ -z $mtu ]; then
++							    $ip_bin -6 route add default dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
++							  else
++							    $ip_bin -6 route add default dev "$dev6" table "$tid" mtu lock $mtu >/dev/null 2>&1 || ipv6_error=1
++							  fi
++							fi
+ 						fi
+ 					fi
+ 					$ip_bin -6 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" >/dev/null 2>&1 || ipv6_error=1
+@@ -1791,6 +1808,9 @@ EOF
+ 			fi
+ 			if [ "$ipv4_error" -eq 0 ] || [ "$ipv6_error" -eq 0 ]; then
+ 				dscp="$(uci -q get "${packageName}".config."${iface}"_dscp)"
++				#Modified for adding iptable rule for setting dscp in downlink
++				dl_dscp="$(uci -q get "${packageName}".config."${iface}"_dl_dscp)"
++				ifname=$(ifstatus ${iface} | grep "\"l3_device\":" | awk -F: '{print $2}' | awk -F\" '{print $2'})
+ 				if is_nft; then
+ 					if [ "${dscp:-0}" -ge 1 ] && [ "${dscp:-0}" -le 63 ]; then
+ 						nft add rule inet "$nftTable" "${nftPrefix}_prerouting ip dscp ${dscp} goto ${nftPrefix}_mark_${mark}" || s=1
+@@ -1805,6 +1825,9 @@ EOF
+ 					if [ "$iface" = "$icmp_interface" ]; then
+ 						ipt -t mangle -I "${iptPrefix}_OUTPUT" -p icmp -g "${iptPrefix}_MARK_${mark}" || s=1
+ 					fi
++					if [ "${dl_dscp:-0}" -ge 1 ] && [ "${dl_dscp:-0}" -le 63 ]; then
++						ipt -t mangle -I "${iptPrefix}_PREROUTING" -i "${ifname}" -j DSCP --set-dscp "${dl_dscp}"
++					fi
+ 				fi
+ 			else
+ 				s=1
+@@ -1839,31 +1862,39 @@ EOF
+ 			ipv4_error=0
+ 			$ip_bin rule del table "$tid" >/dev/null 2>&1
+ 			if ! is_netifd_table "$iface"; then
+-				$ip_bin route flush table "$tid" >/dev/null 2>&1
++				$ip_bin -4 route flush table "$tid" >/dev/null 2>&1
+ 			fi
+ 			if [ -n "$gw4" ] || [ "$strict_enforcement" -ne 0 ]; then
+ 				if [ -z "$gw4" ]; then
+ 					$ip_bin -4 route add unreachable default table "$tid" >/dev/null 2>&1 || ipv4_error=1
+ 				else
+-					$ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" >/dev/null 2>&1 || ipv4_error=1
++					mtu=$(uci get network.$iface.mtu)
++					if ! is_wan6 $iface; then
++					  if [ -z $mtu ]; then
++					    $ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" >/dev/null 2>&1 || ipv4_error=1
++					  else
++					    $ip_bin -4 route add default via "$gw4" dev "$dev" table "$tid" mtu lock $mtu >/dev/null 2>&1 || ipv4_error=1
++					  fi
++					fi
+ 				fi
+ 				$ip_bin rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" || ipv4_error=1
+ 			fi
+ 			if [ -n "$ipv6_enabled" ]; then
+ 				ipv6_error=0
++				$ip_bin -6 route flush table "$tid" >/dev/null 2>&1
+ 				if { [ -n "$gw6" ] && [ "$gw6" != "::/0" ]; } || [ "$strict_enforcement" -ne 0 ]; then
+ 					if [ -z "$gw6" ] || [ "$gw6" = "::/0" ]; then
+ 						$ip_bin -6 route add unreachable default table "$tid" || ipv6_error=1
+-					elif $ip_bin -6 route list table main | grep -q " dev $dev6 "; then
+-						while read -r i; do
+-							# shellcheck disable=SC2086
+-							$ip_bin -6 route add $i table "$tid" >/dev/null 2>&1 || ipv6_error=1
+-						done << EOF
+-						$($ip_bin -6 route list table main | grep " dev $dev6 ")
+-EOF
+ 					else
++						mtu=$(uci get network.$iface.mtu)
+ 						$ip_bin -6 route add "$($ip_bin -6 -o a show "$dev6" | awk '{print $4}')" dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
+-						$ip_bin -6 route add default dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
++						if is_wan6 $iface; then
++						  if [ -z $mtu ]; then
++						    $ip_bin -6 route add default dev "$dev6" table "$tid" >/dev/null 2>&1 || ipv6_error=1
++						  else
++						    $ip_bin -6 route add default dev "$dev6" table "$tid" mtu lock $mtu >/dev/null 2>&1 || ipv6_error=1
++						  fi
++						fi
+ 					fi
+ 				fi
+ 				$ip_bin -6 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" || ipv6_error=1
+@@ -1910,7 +1941,6 @@ interface_process() {
+ 	fi
+ 
+ 	is_supported_interface "$iface" || return 0
+-	is_wan6 "$iface" && return 0
+ 	[ $((ifaceMark)) -gt $((fw_mask)) ] && return 1
+ 
+ 	if is_ovpn "$iface" && ! is_valid_ovpn "$iface"; then
+@@ -2234,10 +2264,11 @@ service_triggers() {
+ 	procd_close_validate
+ 	procd_open_trigger
+ 		procd_add_reload_trigger 'openvpn'
+-		procd_add_config_trigger "config.change" "${packageName}" /etc/init.d/${packageName} reload
+-		for n in $ifacesSupported; do 
+-			procd_add_interface_trigger "interface.*" "$n" /etc/init.d/${packageName} on_interface_reload "$n"
+-		done
++		#Removing service triggers as pbr is reloaded on interface events in hotplug script
++		#procd_add_config_trigger "config.change" "${packageName}" /etc/init.d/${packageName} reload
++		#for n in $ifacesSupported; do 
++		#	procd_add_interface_trigger "interface.*" "$n" /etc/init.d/${packageName} on_interface_reload "$n"
++		#done
+ 	procd_close_trigger
+ 	if [ "$serviceStartTrigger" = 'on_start' ]; then
+ 		output 3 "$serviceName monitoring interfaces: ${ifacesSupported}\\n"
 -- 
 2.17.1
+
