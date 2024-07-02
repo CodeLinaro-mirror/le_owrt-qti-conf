@@ -1,0 +1,39 @@
+From 41b7f707503f3fa0d4457d4f966e5b6eac19b739 Mon Sep 17 00:00:00 2001
+From: HuaWen CHEN <quic_huawenc@quicinc.com>
+Date: Tue, 2 Jul 2024 17:05:29 +0800
+Subject: [PATCH] mwan3: use nth mode for load balance 5:5
+
+---
+ net/mwan3/files/lib/mwan3/mwan3.sh | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/net/mwan3/files/lib/mwan3/mwan3.sh b/net/mwan3/files/lib/mwan3/mwan3.sh
+index a3e7c00985..7ae0c23330 100644
+--- a/net/mwan3/files/lib/mwan3/mwan3.sh
++++ b/net/mwan3/files/lib/mwan3/mwan3.sh
+@@ -633,6 +633,14 @@ mwan3_set_policy()
+ 				  -m comment --comment \"$iface $weight $weight\" \
+ 				  -j MARK --set-xmark "$(mwan3_id2mask id MMX_MASK)/$MMX_MASK"
+ 	elif [ $is_offline -eq 0 ]; then
++		if [ $weight -eq 5 ] && [ $total_weight -eq 10 ]; then
++			mwan3_push_update -I "mwan3_policy_$policy" \
++				  -m mark --mark 0x0/$MMX_MASK \
++				  -m statistic \
++				  --mode nth --every 2 --packet 0 \
++				  -m comment --comment \"$iface $weight $total_weight\" \
++				  -j MARK --set-xmark "$(mwan3_id2mask id MMX_MASK)/$MMX_MASK"
++		else
+ 		probability=$((weight*1000/total_weight))
+ 		if [ "$probability" -lt 10 ]; then
+ 			probability="0.00$probability"
+@@ -651,6 +659,7 @@ mwan3_set_policy()
+ 				  --probability "$probability" \
+ 				  -m comment --comment \"$iface $weight $total_weight\" \
+ 				  -j MARK --set-xmark "$(mwan3_id2mask id MMX_MASK)/$MMX_MASK"
++		fi
+ 	elif [ -n "$device" ]; then
+ 		echo "$current" | grep -q "^-A mwan3_policy_$policy.*--comment .* [0-9]* [0-9]*" ||
+ 			mwan3_push_update -I "mwan3_policy_$policy" \
+-- 
+2.40.0.windows.1
+
