@@ -47,7 +47,7 @@ def validate_nthreads(value):
     return nthreads
 
 parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
-parser.add_argument('--logging', default='false', help='Please specify wether to build with verbose enabled (V=s), can be used with --nthreads; default --logging=false')
+parser.add_argument('--logging', default='true', help='Please specify wether to build with verbose enabled (V=s), can be used with --nthreads; default --logging=false')
 
 args = parser.parse_args()
 

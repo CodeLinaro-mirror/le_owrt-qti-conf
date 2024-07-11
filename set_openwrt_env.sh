@@ -36,9 +36,6 @@ TOPDIR=$(pwd)
 
 OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
-unlink $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendo
-mkdir -p $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor
-/bin/cp -rp $TOPDIR/src/kernel-5.15/kernel_platform/qcom/proprietary/devicetree/* $TOPDIR/src/kernel-5.15/kernel_platform/msm-kernel/arch/arm64/boot/dts/vendor/
 
 if (( "${OWRT_VERSION%%.*}"=="23")); then
 	/bin/cp $TOPDIR/owrt-qti-conf/V23/feeds.conf $TOPDIR
