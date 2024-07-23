@@ -52,9 +52,10 @@ parser.add_argument('--logging', default='false', help='Please specify wether to
 args = parser.parse_args()
 
 # Validate the arguments
-valid_targets = ['sdx75', 'sdx35']
+valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -274,7 +275,7 @@ def build_kw(profile):
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75 target ---------------------------------
-if args.target == 'sdx75':
+if args.target == 'sdx75' or args.target == 'sdx85':
     if args.automation == 'false':
         # local build
         if args.profile == 'mbb' or args.profile == 'mbb-min':
@@ -311,6 +312,21 @@ if args.target == 'sdx75':
             build_kw(args.profile)
         else:
             build(args.profile)
+
+
+    # Generates the ddm.csv at release/ddm
+    ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
+    output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, 'sdx75', args.profile, 'ddm.csv'))  # Path to save ddm.csv
+
+    # Run the script and capture its output
+    result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+    # Write stdout to ddm.csv
+    with open(output_csv, 'w') as f_csv:
+        f_csv.write(result.stdout)
+
+    # Print the path to the saved ddm.csv
+    print(f"BIN DDM generated and saved at: {output_csv}")
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
