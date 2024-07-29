@@ -81,9 +81,9 @@ function uname_version(){
 
 function set_up_feeds(){
 	rm -rf feeds
-	./scripts/feeds update -a || return
+	./scripts/feeds update -a -b || return
 	./scripts/feeds install -a || return
-	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ]; then
+	if [ "${OWRT_VERSION%%.*}" == "23" ]; then
 		./scripts/feeds uninstall bash || return
 		./scripts/feeds uninstall xz || return
 		./scripts/feeds install -a -f -p qtigplv2 || return
