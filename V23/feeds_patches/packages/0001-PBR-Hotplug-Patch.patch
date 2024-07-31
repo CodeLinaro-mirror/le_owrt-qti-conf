@@ -1,4 +1,4 @@
-From 18e9d7a7c7e6340d9547ccaefea3a8cc12201d98 Mon Sep 17 00:00:00 2001
+From 211cfb70a8ef37214ca34fb836daa70336e9560e Mon Sep 17 00:00:00 2001
 From: aryamali <quic_aryamali@quicinc.com>
 Date: Wed, 27 Mar 2024 18:21:22 +0000
 Subject: [PATCH 1/1] PBR Hotplug Patch
@@ -6,10 +6,10 @@ Subject: [PATCH 1/1] PBR Hotplug Patch
 Signed-off-by: aryamali <quic_aryamali@quicinc.com>
 ---
  net/pbr/Makefile                         |   2 +-
- net/pbr/files/etc/config/pbr.iptables    |  38 ++---
- net/pbr/files/etc/hotplug.d/iface/71-pbr |  34 +++++
- net/pbr/files/etc/init.d/pbr.init        | 172 ++++++++++++++++-------
- 4 files changed, 161 insertions(+), 85 deletions(-)
+ net/pbr/files/etc/config/pbr.iptables    |  38 +----
+ net/pbr/files/etc/hotplug.d/iface/71-pbr |  34 ++++
+ net/pbr/files/etc/init.d/pbr.init        | 194 ++++++++++++++++-------
+ 4 files changed, 182 insertions(+), 86 deletions(-)
  create mode 100644 net/pbr/files/etc/hotplug.d/iface/71-pbr
 
 diff --git a/net/pbr/Makefile b/net/pbr/Makefile
@@ -119,7 +119,7 @@ index 0000000000..ec0980a10b
 +	fi
 +fi
 diff --git a/net/pbr/files/etc/init.d/pbr.init b/net/pbr/files/etc/init.d/pbr.init
-index b8c9c3d823..a516a9b9f9 100755
+index b8c9c3d823..e3c63b1156 100755
 --- a/net/pbr/files/etc/init.d/pbr.init
 +++ b/net/pbr/files/etc/init.d/pbr.init
 @@ -248,8 +248,10 @@ is_tor_running() {
@@ -164,7 +164,36 @@ index b8c9c3d823..a516a9b9f9 100755
  	while [ -z "$wanGW" ] ; do
  		load_network
  		if [ $((sleepCount)) -gt $((boot_timeout)) ] || [ -n "$wanGW" ]; then break; fi
-@@ -1176,7 +1182,8 @@ policy_routing_iptables() {
+@@ -489,7 +495,27 @@ ips() {
+ 		;;
+ 		add_dnsmasq_element)
+ 			[ -n "$ipv6_enabled" ] || unset ipset6
+-			echo "ipset=/${param}/${ipset4}${ipset6:+,$ipset6} # $comment" >> "$dnsmasqFile" && ipv4_error=0
++			#Modifying to add all ipsets with same param to one command
++			#Modifying to only add the ipset for the corresponding ip_family
++			ipset_present=$(grep -s -w $param "$dnsmasqFile")
++			if [ -n "$ipset_present" ]; then
++				left_comm=$(echo "$ipset_present" | awk -F' ' '{print $1}')
++				right_comm=$(echo "$ipset_present" | awk -F' ' '{ for (i = 2; i <= NF; i++) printf $i " " }')
++				right_comm=$(echo "$right_comm" | awk -F':' '{print $1}')
++				right_comm="${right_comm},${comment}"	
++				if is_wan6 $iface; then
++					new_set="${left_comm},${ipset6} ${right_comm}"
++				else
++					new_set="${left_comm},${ipset4} ${right_comm}"
++				fi
++				sed -i "\\@$ipset_present@c$new_set" "$dnsmasqFile"  && ipv4_error=0
++			else
++				if is_wan6 $iface; then
++					echo "ipset=/${param}/${ipset6} # $comment" >> "$dnsmasqFile" && ipv4_error=0
++				else
++					echo "ipset=/${param}/${ipset4} # $comment" >> "$dnsmasqFile" && ipv4_error=0
++				fi
++			fi
+ 		;;
+ 		create)
+ 			ips4 -q -! create "$ipset4" "hash:$type" comment && ipv4_error=0
+@@ -1176,7 +1202,8 @@ policy_routing_iptables() {
  	chain="${chain:-PREROUTING}"
  	mark=$(eval echo "\$mark_${iface//-/_}")
  
@@ -174,7 +203,7 @@ index b8c9c3d823..a516a9b9f9 100755
  		processPolicyError='true'
  		state add 'errorSummary' 'errorPolicyProcessNoIpv6' "$name"
  		return 1
-@@ -1342,11 +1349,11 @@ policy_routing_iptables() {
+@@ -1342,11 +1369,11 @@ policy_routing_iptables() {
  		fi
  
  		local ipv4_error='0' ipv6_error='0'
@@ -189,7 +218,7 @@ index b8c9c3d823..a516a9b9f9 100755
  		fi
  
  	if [ -n "$ipv6_enabled" ] && [ "$ipv4_error" -eq '1' ] && [ "$ipv6_error" -eq '1' ]; then
-@@ -1706,6 +1713,8 @@ interface_process_tor_nft() {
+@@ -1706,6 +1733,8 @@ interface_process_tor_nft() {
  interface_routing() {
  	local action="$1" tid="$2" mark="$3" iface="$4" gw4="$5" dev="$6" gw6="$7" dev6="$8" priority="$9"
  	local dscp s=0 i ipv4_error=1 ipv6_error=1
@@ -198,7 +227,7 @@ index b8c9c3d823..a516a9b9f9 100755
  	if [ -z "$tid" ] || [ -z "$mark" ] || [ -z "$iface" ]; then
  		state add 'errorSummary' 'errorInterfaceRoutingEmptyValues'
  		return 1
-@@ -1714,7 +1723,7 @@ interface_routing() {
+@@ -1714,7 +1743,7 @@ interface_routing() {
  		create)
  			if is_netifd_table "$iface"; then
  				ipv4_error=0
@@ -207,7 +236,7 @@ index b8c9c3d823..a516a9b9f9 100755
  				$ip_bin -4 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" || ipv4_error=1
  				if is_nft; then
  					nft add chain inet "$nftTable" "${nftPrefix}_mark_${mark}" || ipv4_error=1 
-@@ -1727,7 +1736,8 @@ interface_routing() {
+@@ -1727,7 +1756,8 @@ interface_routing() {
  				fi
  				if [ -n "$ipv6_enabled" ]; then
  					ipv6_error=0
@@ -217,7 +246,7 @@ index b8c9c3d823..a516a9b9f9 100755
  				fi
  			else
  				if ! grep -q "$tid ${ipTablePrefix}_${iface}" '/etc/iproute2/rt_tables'; then
-@@ -1736,14 +1746,24 @@ interface_routing() {
+@@ -1736,14 +1766,24 @@ interface_routing() {
  					echo "$tid ${ipTablePrefix}_${iface}" >> '/etc/iproute2/rt_tables'
  					sync
  				fi
@@ -245,7 +274,7 @@ index b8c9c3d823..a516a9b9f9 100755
  					fi
  # shellcheck disable=SC2086
  					while read -r i; do
-@@ -1769,21 +1789,23 @@ EOF
+@@ -1769,21 +1809,23 @@ EOF
  				fi
  				if [ -n "$ipv6_enabled" ]; then
  					ipv6_error=0
@@ -279,7 +308,7 @@ index b8c9c3d823..a516a9b9f9 100755
  						fi
  					fi
  					$ip_bin -6 rule add fwmark "${mark}/${fw_mask}" table "$tid" priority "$priority" >/dev/null 2>&1 || ipv6_error=1
-@@ -1791,6 +1813,9 @@ EOF
+@@ -1791,6 +1833,9 @@ EOF
  			fi
  			if [ "$ipv4_error" -eq 0 ] || [ "$ipv6_error" -eq 0 ]; then
  				dscp="$(uci -q get "${packageName}".config."${iface}"_dscp)"
@@ -289,7 +318,7 @@ index b8c9c3d823..a516a9b9f9 100755
  				if is_nft; then
  					if [ "${dscp:-0}" -ge 1 ] && [ "${dscp:-0}" -le 63 ]; then
  						nft add rule inet "$nftTable" "${nftPrefix}_prerouting ip dscp ${dscp} goto ${nftPrefix}_mark_${mark}" || s=1
-@@ -1805,6 +1830,9 @@ EOF
+@@ -1805,6 +1850,9 @@ EOF
  					if [ "$iface" = "$icmp_interface" ]; then
  						ipt -t mangle -I "${iptPrefix}_OUTPUT" -p icmp -g "${iptPrefix}_MARK_${mark}" || s=1
  					fi
@@ -299,7 +328,7 @@ index b8c9c3d823..a516a9b9f9 100755
  				fi
  			else
  				s=1
-@@ -1839,37 +1867,72 @@ EOF
+@@ -1839,37 +1887,72 @@ EOF
  			ipv4_error=0
  			$ip_bin rule del table "$tid" >/dev/null 2>&1
  			if ! is_netifd_table "$iface"; then
@@ -382,7 +411,7 @@ index b8c9c3d823..a516a9b9f9 100755
  			else
  				s=1
  			fi
-@@ -1910,7 +1973,6 @@ interface_process() {
+@@ -1910,7 +1993,6 @@ interface_process() {
  	fi
  
  	is_supported_interface "$iface" || return 0
@@ -390,7 +419,7 @@ index b8c9c3d823..a516a9b9f9 100755
  	[ $((ifaceMark)) -gt $((fw_mask)) ] && return 1
  
  	if is_ovpn "$iface" && ! is_valid_ovpn "$iface"; then
-@@ -2072,23 +2134,24 @@ start_service() {
+@@ -2072,23 +2154,24 @@ start_service() {
  		return 0
  	fi
  
@@ -431,7 +460,7 @@ index b8c9c3d823..a516a9b9f9 100755
  
  	procd_open_instance "main"
  	procd_set_param command /bin/true
-@@ -2234,10 +2297,11 @@ service_triggers() {
+@@ -2234,10 +2317,11 @@ service_triggers() {
  	procd_close_validate
  	procd_open_trigger
  		procd_add_reload_trigger 'openvpn'
