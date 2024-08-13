@@ -34,7 +34,7 @@
 
 TOPDIR=$(pwd)
 
-OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '([0-9]+)\.([0-9]+)\.' | cut -d '.' -f 1,2)
+OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 if (( "${OWRT_VERSION%%.*}"=="23")); then
