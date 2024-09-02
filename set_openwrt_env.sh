@@ -34,7 +34,7 @@
 
 TOPDIR=$(pwd)
 
-OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
+OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '([0-9]+)\.([0-9]+)\.' | cut -d '.' -f 1,2)
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 if (( "${OWRT_VERSION%%.*}"=="23")); then
@@ -422,6 +422,9 @@ function configure(){
 		if [ "${2}" = "cpe" ]; then
 			TARGET=sdxpinn-cpe-wkk
 		fi
+		if [ "${2}" = "cpe-v1" ]; then
+                        TARGET=sdxpinn-cpe-wkk-v1
+                fi
 		if [ "${2}" = "mbb-512" ]; then
 			TARGET=sdxpinn-512
 		fi

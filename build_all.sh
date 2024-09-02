@@ -63,7 +63,7 @@ if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ]; then
 		configure ${1} ${2} ${3} disable_kernel || exit 1
 		make package/sign_abl/{clean,compile}
 	fi
-	if [ "${2}" == "cpe" ]; then
+	if [ "${2}" == "cpe" ] || [ "${2}" == "cpe-v1" ]; then
 		configure ${1} ${2} ${3} disable_kernel|| exit 1
 		make toolchain/kernel-headers/{clean,compile}
 	fi
