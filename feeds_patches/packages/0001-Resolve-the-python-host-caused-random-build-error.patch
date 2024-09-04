@@ -1,0 +1,49 @@
+From 9c5eb22fde6ec8173949c5bc147f61361d0a5d82 Mon Sep 17 00:00:00 2001
+From: Jeffery To <jeffery.to@gmail.com>
+Date: Sat, 20 May 2023 19:07:22 +0800
+Subject: [PATCH] python3: Fix race condition when doing parallel builds
+
+When doing parallel builds, host Python can install the python3 symlink
+before the Python standard library is installed completely.
+
+When this occurs, it is possible for other packages to detect the
+python3 symlink and try to use host Python before it is fully installed.
+
+This adds a patch to make commoninstall (where the standard library is
+installed) a prerequisite of bininstall (where the python3 symlink is
+installed), so that commoninstall is fully completed before bininstall
+begins.
+
+Patch has been submitted upstream:
+https://github.com/python/cpython/pull/104693
+
+Fixes: https://github.com/openwrt/packages/issues/19241
+
+Signed-off-by: Jeffery To <jeffery.to@gmail.com>
+(cherry picked from commit 67e47f11962c4ea0b1b734913f64c32fbba9edf2)
+Signed-off-by: Jeffery To <jeffery.to@gmail.com>
+
+ .../027-install-python3-symlink-after-stdlib.patch    | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+ create mode 100644 lang/python/python3/patches/027-install-python3-symlink-after-stdlib.patch
+
+diff --git a/lang/python/python3/patches/027-install-python3-symlink-after-stdlib.patch b/lang/python/python3/patches/027-install-python3-symlink-after-stdlib.patch
+new file mode 100644
+index 0000000000..efd193a7dc
+--- /dev/null
++++ b/lang/python/python3/patches/027-install-python3-symlink-after-stdlib.patch
+@@ -0,0 +1,11 @@
++--- a/Makefile.pre.in
+++++ b/Makefile.pre.in
++@@ -1361,7 +1361,7 @@ altbininstall: $(BUILDPYTHON) @FRAMEWORK
++ 			$(DESTDIR)$(BINDIR)/python$(VERSION)$(EXE); \
++ 	fi
++ 
++-bininstall: altbininstall
+++bininstall: commoninstall altbininstall
++ 	if test ! -d $(DESTDIR)$(LIBPC); then \
++ 		echo "Creating directory $(LIBPC)"; \
++ 		$(INSTALL) -d -m $(DIRMODE) $(DESTDIR)$(LIBPC); \
+-- 
+2.17.1
+

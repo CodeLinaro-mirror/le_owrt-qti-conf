@@ -34,7 +34,7 @@
 
 TOPDIR=$(pwd)
 
-OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
+OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '([0-9]+)\.([0-9]+)\.' | cut -d '.' -f 1,2)
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 if (( "${OWRT_VERSION%%.*}"=="23")); then
@@ -132,7 +132,7 @@ function patch_openssl(){
 		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
 	fi
 
-	if [ "${1}" == "sdx75" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
 		OPENSSL_VERSION=3.0.10
 		cd $TOPDIR/package/libs
 		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
@@ -148,7 +148,7 @@ function patch_openssl(){
 }
 
 function update_configs(){
-	if [ "${1}" == "sdx75" ] && [ "${OWRT_VERSION%%.*}" == "23" ] && [ -f "owrt-qti-conf/V23/${1}/${2}.config" ]; then
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] && [ "${OWRT_VERSION%%.*}" == "23" ] && [ -f "owrt-qti-conf/V23/${1}/${2}.config" ]; then
 		IFS='='
 		#read line by line from owrt-qti-conf/V23/${1}/${2}.config
 		while read -r line; do
@@ -415,13 +415,16 @@ function configure(){
 		sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=${BUILD_WITH_MEMOPT}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ "${1}" == "sdx75" ]; then
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ]; then
 		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 			TARGET=sdxpinn
 		fi
 		if [ "${2}" = "cpe" ]; then
 			TARGET=sdxpinn-cpe-wkk
 		fi
+		if [ "${2}" = "cpe-v1" ]; then
+                        TARGET=sdxpinn-cpe-wkk-v1
+                fi
 		if [ "${2}" = "mbb-512" ]; then
 			TARGET=sdxpinn-512
 		fi
@@ -529,7 +532,7 @@ if [ ! -z "${TARGET_MACHINE}" ]; then
 ./scripts/feeds update -a || exit 1
 ./scripts/feeds install -a || exit 1
 
-if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ]; then
+if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ] || [ ${TARGET_MACHINE} == 'sdx85' ]; then
 	cp owrt-qti-conf/${TARGET_MACHINE}/mbb.config .config || exit 1
 fi
 

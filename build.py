@@ -52,9 +52,10 @@ parser.add_argument('--logging', default='false', help='Please specify wether to
 args = parser.parse_args()
 
 # Validate the arguments
-valid_targets = ['sdx75', 'sdx35']
+valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
-valid_profiles['sdx75'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
+valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1','mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -274,13 +275,16 @@ def build_kw(profile):
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75 target ---------------------------------
-if args.target == 'sdx75':
+if args.target == 'sdx75' or args.target == 'sdx85':
     if args.automation == 'false':
         # local build
         if args.profile == 'mbb' or args.profile == 'mbb-min':
             build_kernel_platform(args.target, 'sdxpinn', args.variant)  # build kernel with sdxpinn configuration
         elif args.profile == 'cpe':
             build_kernel_platform(args.target, 'sdxpinn-cpe-wkk', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+        elif args.profile == 'cpe-v1':
+            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+
         elif args.profile == 'mbb-512':
             build_kernel_platform(args.target, 'sdxpinn-512', args.variant)  # build kernel with sdxpinn-512 configuration
         else:
@@ -300,6 +304,9 @@ if args.target == 'sdx75':
             build('mbb-min')
         elif args.profile == 'cpe':
             set_kernel_target(args.target, 'sdxpinn-cpe-wkk', args.variant)  # set kernel target for sdxpinn-cpe-wkk configuration
+            build('recovery')
+        elif args.profile == 'cpe-v1':
+            set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
             build('recovery')
         elif args.profile == 'mbb-512':
             set_kernel_target(args.target, 'sdxpinn-512', args.variant)  # set kernel target for sdxpinn-512 configuration
