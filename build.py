@@ -48,6 +48,7 @@ def validate_nthreads(value):
 
 parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
 parser.add_argument('--logging', default='false', help='Please specify wether to build with verbose enabled (V=s), can be used with --nthreads; default --logging=false')
+parser.add_argument('--bin_ddm', default='true', help='Generates BIN DDM info')
 
 args = parser.parse_args()
 
@@ -60,6 +61,7 @@ valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
 valid_logging = ['false','true']
+valid_bin_ddm = ['false','true']
 
 if args.target not in valid_targets:
     print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
@@ -81,6 +83,11 @@ if args.automation not in valid_automation_flags:
 if args.logging not in valid_logging:
     print("Invalid logging options '{}'. Valid logging options are: {}".format(args.automation, ', '.join(valid_automation_flags)))
     exit(1)
+
+if args.bin_ddm not in valid_bin_ddm:
+    print("Invalid bin-ddm options '{}'. Valid logging options are: {}".format(args.automation, ', '.join(valid_automation_flags)))
+    print("--bin-ddm set to true (default)")
+    args.bin_ddm = 'true'
 
 # Fresh/distclean-ed workspace required for automation
 def cleanup_workspace(automation):
@@ -320,19 +327,21 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             build(args.profile)
 
 
-    # Generates the ddm.csv at release/ddm
-    ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
-    output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, 'sdx75', args.profile, 'ddm.csv'))  # Path to save ddm.csv
+    if args.bin_ddm == 'true':
+        # Generates the ddm.csv at release/ddm
+        ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
+        output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, args.target, args.profile, 'ddm.csv'))  # Path to save ddm.csv
 
-    # Run the script and capture its output
-    result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        # Run the script and capture its output
+        result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
-    # Write stdout to ddm.csv
-    with open(output_csv, 'w') as f_csv:
-        f_csv.write(result.stdout)
+        # Write stdout to ddm.csv
+        with open(output_csv, 'w') as f_csv:
+             f_csv.write(result.stdout)
 
-    # Print the path to the saved ddm.csv
-    print(f"BIN DDM generated and saved at: {output_csv}")
+        # Print the path to the saved ddm.csv
+        print(f"BIN DDM generated and saved at: {output_csv}")
+
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
