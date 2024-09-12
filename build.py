@@ -281,24 +281,27 @@ def build_kw(profile):
 
 print_build_configuration(args.target, args.profile, args.variant)
 
-# ------------------------ complete build sequence for sdx75 target ---------------------------------
+# ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
 if args.target == 'sdx75' or args.target == 'sdx85':
     if args.automation == 'false':
         # local build
         if args.profile == 'mbb' or args.profile == 'mbb-min':
-            build_kernel_platform(args.target, 'sdxpinn', args.variant)  # build kernel with sdxpinn configuration
+            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
         elif args.profile == 'cpe':
-            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
         elif args.profile == 'cpe-v1':
-            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
 
         elif args.profile == 'mbb-512':
-            build_kernel_platform(args.target, 'sdxpinn-512', args.variant)  # build kernel with sdxpinn-512 configuration
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova-512'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
-#       common build sequence for sdx75 profiles
+#       common build sequence for sdx75/sdx85 profiles
         make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
@@ -306,17 +309,20 @@ if args.target == 'sdx75' or args.target == 'sdx85':
     else:
         #automation
         if args.profile == 'mbb':
-            set_kernel_target(args.target, 'sdxpinn', args.variant)  # set kernel target for sdxpinn configuration
+            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
             build('mbb-min')
         elif args.profile == 'cpe':
-            set_kernel_target(args.target, 'sdxpinn-cpe-wkk', args.variant)  # set kernel target for sdxpinn-cpe-wkk configuration
+            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
         elif args.profile == 'cpe-v1':
-            set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+            set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
             build('recovery')
         elif args.profile == 'mbb-512':
-            set_kernel_target(args.target, 'sdxpinn-512', args.variant)  # set kernel target for sdxpinn-512 configuration
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova-512'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
@@ -341,7 +347,6 @@ if args.target == 'sdx75' or args.target == 'sdx85':
 
         # Print the path to the saved ddm.csv
         print(f"BIN DDM generated and saved at: {output_csv}")
-
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':

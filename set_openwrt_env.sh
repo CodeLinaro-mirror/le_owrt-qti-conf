@@ -37,6 +37,8 @@ TOPDIR=$(pwd)
 OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '([0-9]+)\.([0-9]+)\.' | cut -d '.' -f 1,2)
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
+bazel_based_target=0
+
 if (( "${OWRT_VERSION%%.*}"=="23")); then
 	/bin/cp $TOPDIR/owrt-qti-conf/V23/feeds.conf $TOPDIR
 fi
@@ -87,6 +89,14 @@ function set_up_feeds(){
 		./scripts/feeds uninstall bash || return
 		./scripts/feeds uninstall xz || return
 		./scripts/feeds install -a -f -p qtigplv2 || return
+	fi
+}
+
+function set_bazel_target(){
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx35" ]; then
+		bazel_based_target=0
+	elif [ "${1}" == "sdx85" ]; then
+		bazel_based_target=1
 	fi
 }
 
@@ -178,8 +188,14 @@ verify_target_configuration(){
 }
 
 function build_abl_user(){
-	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	read -ra LINUX_VERSION <<< "$(sed -n -e '/LINUX_VERSION/ s/.*= *//p' "target/linux/${1}/Makefile")"
+	cd /$TOPDIR/src/kernel-${LINUX_VERSION}/kernel_platform
+	echo "Compiling abl"
+	if [ "${bazel_based_target}" == "0" ]; then
 	export TARGET_BUILD_VARIANT=user && BUILD_CONFIG=msm-kernel/build.config.msm.${1} VARIANT=${2}_defconfig OUT_DIR=../out/msm-kernel-${1}-${2}_defconfig ./build/build_abl.sh
+	elif  [ "${bazel_based_target}" == "1" ]; then
+	export TARGET_BUILD_VARIANT=user && ./tools/bazel run --lto=thin //msm-kernel:${2}_${3}-defconfig_abl_dist
+	fi
 	if [ $? -ne 0 ]; then
 		echo "ABL user build failed. Please check logs above for error..."
 		cd $TOPDIR
@@ -222,6 +238,33 @@ function set_kernel_target(){
 	set_kernel_variant ${1} ${3}
 }
 
+function compile_kernel(){
+	if [ -z "${1}" ] || [ -z "${2}" ] || [ -z "${3}" ]
+	then
+		echo "Please provide all the arguments required to build kernel: chip_target, kp_target, kp_variant"
+		return
+	fi
+
+	if [ "${bazel_based_target}" == "0" ]; then
+		if [ -f prebuilts/qcom_boot_artifacts/build.config.qc.standalone ]; then
+		BUILD_CONFIG=msm-kernel/build.config.msm.${2} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
+		else
+		BUILD_CONFIG=msm-kernel/build.config.msm.${2} VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
+		fi
+	elif  [ "${bazel_based_target}" == "1" ]; then
+		./build_with_bazel.py -t ${2} ${3}-defconfig --out_dir ../out/msm-kernel-${2}-${3}_defconfig
+	fi
+
+	#Flag kernel build failure
+	if [ $? -ne 0 ]; then
+		echo "Kernel Build failed. Please check logs above for error..."
+		cd $TOPDIR
+		return 1
+	elif [ $? -eq 0 ]; then
+		echo "Kernel Build succeeded."
+	fi
+}
+
 # plain kernel platform build, takes as arguments sdx_target, kp_target and kp_variant
 # profile input not required (no consumption of kp products)
 # to be individually called ONLY in build.py to trigger plain kernel build prior to any profile configuration
@@ -238,7 +281,7 @@ function build_kernel_platform(){
 		echo "Please provide all the arguments required to build kernel: chip_target, kp_target, kp_variant"
 		return
 	fi
-
+	set_bazel_target ${1} || return 1
 	set_kernel_target ${1} ${2} ${3} || return 1
 
 	if [ "${3}" == "user" ]; then
@@ -247,27 +290,15 @@ function build_kernel_platform(){
 
 	# Build/re-build kernel
 	echo "Building kernel for: TARGET=${2}, VARIANT=${3}"
-	cd $TOPDIR/src/kernel-5.15/kernel_platform
+	read -ra LINUX_VERSION <<< "$(sed -n -e '/LINUX_VERSION/ s/.*= *//p' "target/linux/${1}/Makefile")"
+	cd /$TOPDIR/src/kernel-${LINUX_VERSION}/kernel_platform
 	rm -rf ../out/msm-kernel-${2}-${3}_defconfig
-	if [ -f prebuilts/qcom_boot_artifacts/build.config.qc.standalone ]; then
-	BUILD_CONFIG=msm-kernel/build.config.msm.${2} EXTRA_CONFIGS=./prebuilts/qcom_boot_artifacts/build.config.qc.standalone VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
-	else
-	BUILD_CONFIG=msm-kernel/build.config.msm.${2} VARIANT=${3}_defconfig OUT_DIR=../out/msm-kernel-${2}-${3}_defconfig ./build/build.sh
-	fi
-
-	#Flag kernel build failure
-	if [ $? -ne 0 ]; then
-		echo "Kernel Build failed. Please check logs above for error..."
-		cd $TOPDIR
-		return 1
-	fi
-
+	compile_kernel ${1} ${2} ${3}|| return 1
 	cd $TOPDIR
-
 	# If USER_VARIANT flag in sdx_target/Makefile is set, trigger build for abl_user
 	USER_VARIANT=$(sed -n -e '/USER_VARIANT/ s/.*= *//p' "target/linux/${1}/Makefile")
 	if [ "${USER_VARIANT}" == "1" ]; then
-		build_abl_user ${2} ${3}
+		build_abl_user ${1} ${2} ${3}
 	fi
 }
 
@@ -415,7 +446,7 @@ function configure(){
 		sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=${BUILD_WITH_MEMOPT}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ]; then
+	if [ "${1}" == "sdx75" ]; then
 		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 			TARGET=sdxpinn
 		fi
@@ -429,6 +460,19 @@ function configure(){
 			TARGET=sdxpinn-512
 		fi
 	fi
+
+	if [ "${1}" == "sdx85" ]; then
+	        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+	            TARGET=sdxkova
+	        fi
+	        if [ "${2}" = "cpe" ]; then
+	            TARGET=sdxkova.cpe.wkk
+	        fi
+	        if [ "${2}" = "mbb-512" ]; then
+	            TARGET=sdxkova-512
+	        fi
+	fi
+
 
 	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
 	# 	use case: build_all.sh in automation
