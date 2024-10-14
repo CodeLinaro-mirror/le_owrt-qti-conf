@@ -34,13 +34,15 @@
 
 TOPDIR=$(pwd)
 
-OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '([0-9]+)\.([0-9]+)\.' | cut -d '.' -f 1,2)
+OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
+OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
+echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 bazel_based_target=0
 
-if (( "${OWRT_VERSION%%.*}"=="23")); then
-	/bin/cp $TOPDIR/owrt-qti-conf/V23/feeds.conf $TOPDIR
+if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+        /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
 fi
 
 cd $TOPDIR
@@ -105,8 +107,8 @@ function patch_upstream_feeds(){
 	feeds=(packages luci routing)
 	feeds_path=$TOPDIR/feeds
 	patches=$TOPDIR/owrt-qti-conf/feeds_patches
-	if (( "${OWRT_VERSION%%.*}"=="23")); then
-		patches=$TOPDIR/owrt-qti-conf/V23/feeds_patches
+	if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+		patches=$TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds_patches
 	fi
 	for feed in ${feeds[@]}; do
 		for patch in $patches/$feed/*.patch; do
@@ -136,7 +138,7 @@ function patch_upstream_feeds(){
 }
 
 function patch_openssl(){
-	if (( "${OWRT_VERSION%%.*}"=="23")); then
+	if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
 		OPENSSL_VERSION=$(sed -n -e '/PKG_VERSION:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
 	else
 		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
@@ -158,7 +160,7 @@ function patch_openssl(){
 }
 
 function update_configs(){
-	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] && [ "${OWRT_VERSION%%.*}" == "23" ] && [ -f "owrt-qti-conf/V23/${1}/${2}.config" ]; then
+	if [ -f "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config" ]; then
 		IFS='='
 		#read line by line from owrt-qti-conf/V23/${1}/${2}.config
 		while read -r line; do
@@ -170,7 +172,7 @@ function update_configs(){
 			else
 				echo "$line" >> ".config"
 			fi
-		done < "owrt-qti-conf/V23/${1}/${2}.config"
+		done < "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config"
 	fi
 }
 
