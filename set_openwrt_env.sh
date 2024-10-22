@@ -75,10 +75,15 @@ else
 fi
 
 function uname_version(){
+	KERNEL_VERSION=5.15
+	set_bazel_target ${1}
+	if [ "${bazel_based_target}" == "1" ]; then
+		KERNEL_VERSION=6.6
+	fi
 	IFS=''
 	read -ra TARGET <<< "$(sed -n -e '/KERNEL_PLATFORM_TARGET/ s/.*= *//p' "target/linux/${1}/Makefile")"
 	IFS=' '
-	read DEFINE UTSRELEASE VERSION <<< $(cat src/kernel-5.15/out/msm-kernel-${TARGET}-${2}_defconfig/dist/kernel-headers/include/generated/utsrelease.h)
+	read DEFINE UTSRELEASE VERSION <<< $(cat src/kernel-${KERNEL_VERSION}/out/msm-kernel-${TARGET}-${2}_defconfig/dist/kernel-headers/include/generated/utsrelease.h)
 	UNAME_R=$(echo ${VERSION} | tr -d '"')
 	sed -i "s/UNAME_VERSION:=.*/UNAME_VERSION:=${UNAME_R}/" target/linux/${1}/Makefile
 }
