@@ -38,6 +38,6 @@ UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack connt
 
 COREBSP_UTILS:=pm-utils
 
-ifeq ($(EXTERNAL_BUILD),1)
-QTIBSPPROP += xmllib_prebuilt
-endif
+#ifeq ($(EXTERNAL_BUILD),1)
+#QTIBSPPROP += xmllib_prebuilt
+#endif
