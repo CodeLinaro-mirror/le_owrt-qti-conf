@@ -1,4 +1,4 @@
-From 512163568334445d1a8e24fbe082b9f6dae46fb6 Mon Sep 17 00:00:00 2001
+From fab7be777f31a9e5493b165e21eb881b4cf1b7a6 Mon Sep 17 00:00:00 2001
 From: aryamali <quic_aryamali@quicinc.com>
 Date: Wed, 27 Mar 2024 18:21:22 +0000
 Subject: [PATCH 1/1] PBR Hotplug Patch
@@ -80,7 +80,7 @@ index c627126442..383d3f0104 100644
 -	option enabled '0'
 diff --git a/net/pbr/files/etc/hotplug.d/iface/71-pbr b/net/pbr/files/etc/hotplug.d/iface/71-pbr
 new file mode 100644
-index 0000000000..a0af9389b7
+index 0000000000..0fd7a94b67
 --- /dev/null
 +++ b/net/pbr/files/etc/hotplug.d/iface/71-pbr
 @@ -0,0 +1,36 @@
@@ -99,13 +99,13 @@ index 0000000000..a0af9389b7
 +		if echo $ACTION | grep ifup; then
 +			wan_up=$(grep -w "${INTERFACE}.up='1'" /tmp/state/network -c)
 +			if [ $wan_up -eq 1 ]; then
++				#If first wan coming up start pbr
++				if [ $num_rmnet -eq 1 ] || [ $pbr_status = "stopped" ]; then
++					/etc/data/qcmapPbrConfig.sh start_pbr
 +				#If addional wan coming up reload pbr
-+				if [ $num_rmnet -gt 1 ] || [ $pbr_status = "started" ]; then
++				elif [ $num_rmnet -gt 1 ] || [ $pbr_status = "started" ]; then
 +					/etc/init.d/pbr start on_interface_reload $INTERFACE
 +					/etc/data/qcmapPbrConfig.sh delete_conntrack_on_wan_event_pbr $INTERFACE
-+				#If first wan coming up start pbr
-+				elif [ $num_rmnet -eq 1 ]; then
-+					/etc/data/qcmapPbrConfig.sh start_pbr
 +				fi
 +			fi
 +		elif echo $ACTION | grep ifdown; then
