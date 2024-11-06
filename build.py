@@ -295,7 +295,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
 
         elif args.profile == 'mbb-512':
-            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova-512'
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
             build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))

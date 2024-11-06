@@ -476,7 +476,7 @@ function configure(){
 	            TARGET=sdxkova.cpe.wkk
 	        fi
 	        if [ "${2}" = "mbb-512" ]; then
-	            TARGET=sdxkova-512
+	            TARGET=sdxkova.512
 	        fi
 	fi
 
