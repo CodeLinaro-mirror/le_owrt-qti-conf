@@ -1,4 +1,4 @@
-From 52f949e882d4ce27ba7985006180333d68729ac2 Mon Sep 17 00:00:00 2001
+From 38478870e43131c4c61376f79ec223fda9f39643 Mon Sep 17 00:00:00 2001
 From: aryamali <quic_aryamali@quicinc.com>
 Date: Wed, 27 Mar 2024 18:21:22 +0000
 Subject: [PATCH 1/1] PBR Hotplug Patch
@@ -6,10 +6,10 @@ Subject: [PATCH 1/1] PBR Hotplug Patch
 Signed-off-by: aryamali <quic_aryamali@quicinc.com>
 ---
  net/pbr/Makefile                         |   2 +-
- net/pbr/files/etc/config/pbr.iptables    |  38 +---
- net/pbr/files/etc/hotplug.d/iface/71-pbr |  34 ++++
- net/pbr/files/etc/init.d/pbr.init        | 212 +++++++++++++++++------
- 4 files changed, 199 insertions(+), 87 deletions(-)
+ net/pbr/files/etc/config/pbr.iptables    |  40 +---
+ net/pbr/files/etc/hotplug.d/iface/71-pbr |  36 ++++
+ net/pbr/files/etc/init.d/pbr.init        | 234 +++++++++++++++++------
+ 4 files changed, 222 insertions(+), 90 deletions(-)
  create mode 100644 net/pbr/files/etc/hotplug.d/iface/71-pbr
 
 diff --git a/net/pbr/Makefile b/net/pbr/Makefile
@@ -26,7 +26,7 @@ index 744db6ab67..b26ff71a55 100644
  	$(INSTALL_BIN)  ./files/etc/uci-defaults/90-pbr $(1)/etc/uci-defaults/90-pbr
  	$(INSTALL_DIR) $(1)/usr/share/pbr
 diff --git a/net/pbr/files/etc/config/pbr.iptables b/net/pbr/files/etc/config/pbr.iptables
-index c627126442..383d3f0104 100644
+index c627126442..ff84e0b00e 100644
 --- a/net/pbr/files/etc/config/pbr.iptables
 +++ b/net/pbr/files/etc/config/pbr.iptables
 @@ -4,8 +4,14 @@ config pbr 'config'
@@ -46,7 +46,7 @@ index c627126442..383d3f0104 100644
  	option boot_timeout '30'
  	option rule_create_option 'add'
  	option procd_reload_delay '1'
-@@ -15,31 +21,3 @@ config pbr 'config'
+@@ -15,31 +21,5 @@ config pbr 'config'
  	list webui_supported_protocol 'udp'
  	list webui_supported_protocol 'tcp udp'
  	list webui_supported_protocol 'icmp'
@@ -78,12 +78,14 @@ index c627126442..383d3f0104 100644
 -	option chain 'OUTPUT'
 -	option proto 'udp'
 -	option enabled '0'
++	option metric_counter4 '1'
++	option metric_counter6 '2'
 diff --git a/net/pbr/files/etc/hotplug.d/iface/71-pbr b/net/pbr/files/etc/hotplug.d/iface/71-pbr
 new file mode 100644
-index 0000000000..ec0980a10b
+index 0000000000..15f37a6840
 --- /dev/null
 +++ b/net/pbr/files/etc/hotplug.d/iface/71-pbr
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,36 @@
 +#!/bin/sh
 +#SPDX-License-Identifier: GPL-3.0-only
 +#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
@@ -93,25 +95,27 @@ index 0000000000..ec0980a10b
 +
 +if [ -x /etc/init.d/pbr ] && [ $(uci get pbr.config.enabled) = "1" ]; then
 +	if echo $INTERFACE | grep wan; then
-+		num_rmnet=$(grep rmnet /tmp/state/network -c)
++		num_rmnet=$(ifconfig | grep -c "rmnet_data")
++		pbr_status=$(/etc/init.d/pbr start is_running)
++		logger $(basename "$0")":pbr:"$LINENO": pbr status: $pbr_status num rmnet: $num_rmnet"
 +		if echo $ACTION | grep ifup; then
 +			wan_up=$(grep -w "${INTERFACE}.up='1'" /tmp/state/network -c)
 +			if [ $wan_up -eq 1 ]; then
++				#If first wan coming up start pbr
++				if [ $pbr_status = "stopped" ]; then
++					/etc/data/qcmapPbrConfig.sh start_pbr
 +				#If addional wan coming up reload pbr
-+				if [ $num_rmnet -gt 1 ]; then
++				elif [ $num_rmnet -gt 1 ] || [ $pbr_status = "started" ]; then
 +					/etc/init.d/pbr start on_interface_reload $INTERFACE
 +					/etc/data/qcmapPbrConfig.sh delete_conntrack_on_wan_event_pbr $INTERFACE
-+				#If first wan coming up start pbr
-+				elif [ $num_rmnet -eq 1 ]; then
-+					/etc/data/qcmapPbrConfig.sh start_pbr
 +				fi
 +			fi
 +		elif echo $ACTION | grep ifdown; then
 +			#If last wan going down stop pbr
-+			if [ $num_rmnet -eq 1 ]; then
++			if [ $num_rmnet -eq 0 ] && [ $pbr_status != "stopped" ]; then
 +				/etc/data/qcmapPbrConfig.sh stop_pbr
 +			#If additional wan going down reload pbr
-+			elif [ $num_rmnet -gt 1 ]; then
++			elif [ $num_rmnet -gt 0 ] && [ $pbr_status != "stopped" ]; then
 +				/etc/init.d/pbr start on_interface_reload $INTERFACE
 +				/etc/data/qcmapPbrConfig.sh delete_conntrack_on_wan_event_pbr $INTERFACE
 +			fi
@@ -119,7 +123,7 @@ index 0000000000..ec0980a10b
 +	fi
 +fi
 diff --git a/net/pbr/files/etc/init.d/pbr.init b/net/pbr/files/etc/init.d/pbr.init
-index b8c9c3d823..96daa47771 100755
+index b8c9c3d823..5bb2419e54 100755
 --- a/net/pbr/files/etc/init.d/pbr.init
 +++ b/net/pbr/files/etc/init.d/pbr.init
 @@ -248,8 +248,10 @@ is_tor_running() {
@@ -342,7 +346,22 @@ index b8c9c3d823..96daa47771 100755
  				fi
  			else
  				s=1
-@@ -1839,37 +1895,80 @@ EOF
+@@ -1826,9 +1882,12 @@ EOF
+ 			return "$s"
+ 		;;
+ 		delete|destroy)
+-			$ip_bin rule del table "$tid" >/dev/null 2>&1
++			#UPSTREAM_BUG Flush ip 6 rules as well
++			$ip_bin -4 rule del table "$tid" >/dev/null 2>&1
++			$ip_bin -6 rule del table "$tid" >/dev/null 2>&1
+ 			if ! is_netifd_table "$iface"; then
+-				$ip_bin route flush table "$tid" >/dev/null 2>&1
++				$ip_bin -4 route flush table "$tid" >/dev/null 2>&1
++				$ip_bin -6 route flush table "$tid" >/dev/null 2>&1
+ 				sed -i "/${ipTablePrefix}_${iface}\$/d" '/etc/iproute2/rt_tables'
+ 				sync
+ 			fi
+@@ -1839,37 +1898,80 @@ EOF
  			ipv4_error=0
  			$ip_bin rule del table "$tid" >/dev/null 2>&1
  			if ! is_netifd_table "$iface"; then
@@ -433,7 +452,7 @@ index b8c9c3d823..96daa47771 100755
  			else
  				s=1
  			fi
-@@ -1910,7 +2009,6 @@ interface_process() {
+@@ -1910,7 +2012,6 @@ interface_process() {
  	fi
  
  	is_supported_interface "$iface" || return 0
@@ -441,7 +460,16 @@ index b8c9c3d823..96daa47771 100755
  	[ $((ifaceMark)) -gt $((fw_mask)) ] && return 1
  
  	if is_ovpn "$iface" && ! is_valid_ovpn "$iface"; then
-@@ -2072,23 +2170,24 @@ start_service() {
+@@ -2066,29 +2167,33 @@ start_service() {
+ 		on_restart)
+ 			serviceStartTrigger='on_start'
+ 		;;
++		is_running)
++			serviceStartTrigger='is_running'
++		;;
+ 	esac
+ 
+ 	if [ -n "$reloadedIface" ] && ! is_supported_interface "$reloadedIface"; then
  		return 0
  	fi
  
@@ -482,7 +510,33 @@ index b8c9c3d823..96daa47771 100755
  
  	procd_open_instance "main"
  	procd_set_param command /bin/true
-@@ -2234,10 +2333,11 @@ service_triggers() {
+@@ -2097,6 +2202,15 @@ start_service() {
+ 	procd_open_data
+ 
+ 	case $serviceStartTrigger in
++		is_running)
++			if is_service_running; then
++				echo "started"
++				return 0
++			else
++				echo "stopped"
++				return 0
++			fi
++		;;
+ 		on_interface_reload)
+ 			output 1 "Reloading Interface: $reloadedIface "
+ 			json_add_array 'gateways'
+@@ -2185,7 +2299,8 @@ start_service() {
+ 				output 1 '\n'
+ 			fi
+ 			resolver 'init_end'
+-			resolver 'compare_hash' && resolver 'restart'
++			#UPSTREAM_BUG Always restart dnsmasq when pbr starts to ensure dnsmasq cache is built again
++			resolver 'restart'
+ 			traffic_killswitch 'remove'
+ 		;;
+ 	esac
+@@ -2234,10 +2349,11 @@ service_triggers() {
  	procd_close_validate
  	procd_open_trigger
  		procd_add_reload_trigger 'openvpn'
