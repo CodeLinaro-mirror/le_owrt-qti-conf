@@ -92,7 +92,7 @@ function set_up_feeds(){
 	rm -rf feeds
 	./scripts/feeds update -a -b || return
 	./scripts/feeds install -a || return
-	if [ "${OWRT_VERSION%%.*}" == "23" ]; then
+	if [[ "${OWRT_VERSION%%.*}" == "23" || "${OWRT_VERSION%%.*}" == "24" ]]; then
 		./scripts/feeds uninstall bash || return
 		./scripts/feeds uninstall xz || return
 		./scripts/feeds install -a -f -p qtigplv2 || return
