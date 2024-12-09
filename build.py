@@ -48,18 +48,20 @@ def validate_nthreads(value):
 
 parser.add_argument('--nthreads', type=validate_nthreads, default='32', help='Please specify number of threads to initiate the build; default --nthreads=32')
 parser.add_argument('--logging', default='false', help='Please specify wether to build with verbose enabled (V=s), can be used with --nthreads; default --logging=false')
+parser.add_argument('--bin_ddm', default='true', help='Generates BIN DDM info')
 
 args = parser.parse_args()
 
 # Validate the arguments
 valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
-valid_profiles['sdx75'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
+valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1','mbb-min', 'mbb-512']
 valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
 valid_logging = ['false','true']
+valid_bin_ddm = ['false','true']
 
 if args.target not in valid_targets:
     print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
@@ -81,6 +83,11 @@ if args.automation not in valid_automation_flags:
 if args.logging not in valid_logging:
     print("Invalid logging options '{}'. Valid logging options are: {}".format(args.automation, ', '.join(valid_automation_flags)))
     exit(1)
+
+if args.bin_ddm not in valid_bin_ddm:
+    print("Invalid bin-ddm options '{}'. Valid logging options are: {}".format(args.automation, ', '.join(valid_automation_flags)))
+    print("--bin-ddm set to true (default)")
+    args.bin_ddm = 'true'
 
 # Fresh/distclean-ed workspace required for automation
 def cleanup_workspace(automation):
@@ -274,21 +281,27 @@ def build_kw(profile):
 
 print_build_configuration(args.target, args.profile, args.variant)
 
-# ------------------------ complete build sequence for sdx75 target ---------------------------------
+# ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
 if args.target == 'sdx75' or args.target == 'sdx85':
     if args.automation == 'false':
         # local build
         if args.profile == 'mbb' or args.profile == 'mbb-min':
-            build_kernel_platform(args.target, 'sdxpinn', args.variant)  # build kernel with sdxpinn configuration
+            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
         elif args.profile == 'cpe':
-            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk', args.variant)  # build kernel with sdxpinn-cpe-wkk configuration
+            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
+        elif args.profile == 'cpe-v1':
+            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
+
         elif args.profile == 'mbb-512':
-            build_kernel_platform(args.target, 'sdxpinn-512', args.variant)  # build kernel with sdxpinn-512 configuration
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
+            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
             print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
-#       common build sequence for sdx75 profiles
+#       common build sequence for sdx75/sdx85 profiles
         make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
         consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
         build('recovery')  # configure & build recovery profile
@@ -296,14 +309,20 @@ if args.target == 'sdx75' or args.target == 'sdx85':
     else:
         #automation
         if args.profile == 'mbb':
-            set_kernel_target(args.target, 'sdxpinn', args.variant)  # set kernel target for sdxpinn configuration
+            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
             build('mbb-min')
         elif args.profile == 'cpe':
-            set_kernel_target(args.target, 'sdxpinn-cpe-wkk', args.variant)  # set kernel target for sdxpinn-cpe-wkk configuration
+            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
+            build('recovery')
+        elif args.profile == 'cpe-v1':
+            set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
             build('recovery')
         elif args.profile == 'mbb-512':
-            set_kernel_target(args.target, 'sdxpinn-512', args.variant)  # set kernel target for sdxpinn-512 configuration
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
+            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
@@ -314,19 +333,20 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             build(args.profile)
 
 
-    # Generates the ddm.csv at release/ddm
-    ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
-    output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, 'sdx75', args.profile, 'ddm.csv'))  # Path to save ddm.csv
+    if args.bin_ddm == 'true':
+        # Generates the ddm.csv at release/ddm
+        ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
+        output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, args.target, args.profile, 'ddm.csv'))  # Path to save ddm.csv
 
-    # Run the script and capture its output
-    result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        # Run the script and capture its output
+        result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
-    # Write stdout to ddm.csv
-    with open(output_csv, 'w') as f_csv:
-        f_csv.write(result.stdout)
+        # Write stdout to ddm.csv
+        with open(output_csv, 'w') as f_csv:
+             f_csv.write(result.stdout)
 
-    # Print the path to the saved ddm.csv
-    print(f"BIN DDM generated and saved at: {output_csv}")
+        # Print the path to the saved ddm.csv
+        print(f"BIN DDM generated and saved at: {output_csv}")
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
