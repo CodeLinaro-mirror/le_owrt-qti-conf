@@ -321,7 +321,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
             build('recovery')
         elif args.profile == 'mbb-512':
-            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova-512'
+            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
             set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
         else:
