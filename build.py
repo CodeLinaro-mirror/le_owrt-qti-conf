@@ -57,7 +57,7 @@ valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1','mbb-min', 'mbb-512']
 valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
-valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2']
+valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
 valid_logging = ['false','true']
@@ -354,7 +354,7 @@ if args.target == 'sdx35':
         # local build
         if args.profile == 'mbb' or args.profile == 'm2':
             build_kernel_platform(args.target, 'sdxbaagha', args.variant)  # build kernel with sdxbaagha configuration
-        elif args.profile == 'mbb-128m':
+        elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             build_kernel_platform(args.target, 'sdxbaagha-128m', args.variant)  # build kernel with sdxbaagha-128m configuration
         else:
             print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
@@ -370,7 +370,7 @@ if args.target == 'sdx35':
         if args.profile == 'mbb' or args.profile == 'm2':
             set_kernel_target(args.target, 'sdxbaagha', args.variant)  # set kernel target for sdxbaagha configuration
             build('recovery')
-        elif args.profile == 'mbb-128m':
+        elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             set_kernel_target(args.target, 'sdxbaagha-128m', args.variant)  # set kernel target for sdxbaagha-128m configuration
             build('recovery')
         else:

@@ -14,10 +14,16 @@ include $(TOPDIR)/owrt-qti-bt-prop/qtibtprop.mk
 include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
 include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
 include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
+
+ifeq ($(BOARD),sdx85)
+include $(TOPDIR)/owrt-qti-audio-algos/qtiaudioalgos.mk
+else
 include $(TOPDIR)/owrt-qti-args/qtiargs.mk
 include $(TOPDIR)/owrt-qti-pal/qtipal.mk
 include $(TOPDIR)/owrt-qti-agm/qtiagm.mk
 include $(TOPDIR)/owrt-qti-audio-prop/qtiaudioprop.mk
+endif
+
 include $(TOPDIR)/owrt-qti-security/qtisecurity.mk
 include $(TOPDIR)/owrt-qti-security-prop/qtisecurityprop.mk
 include $(TOPDIR)/owrt-qti-ssdk/qtissdk.mk
