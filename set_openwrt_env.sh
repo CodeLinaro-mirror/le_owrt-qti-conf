@@ -33,15 +33,18 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 TOPDIR=$(pwd)
-
-OWRT_VERSION=$(sed -n -e '/VERSION_NUMBER:=/ s/.*= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
+PRPL_VERSION=$(sed -n -e 's/^PRPL_VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
+PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
+OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
+echo ${PRPL_VERSION}
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 bazel_based_target=0
-
-if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+        /bin/cp $TOPDIR/owrt-qti-conf/P3/feeds.conf $TOPDIR
+elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
         /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
 fi
 
@@ -108,12 +111,18 @@ function set_bazel_target(){
 }
 
 function patch_upstream_feeds(){
-	echo "Using feeds for Openwrt version:$OWRT_VERSION"
 	feeds=(packages luci routing)
 	feeds_path=$TOPDIR/feeds
 	patches=$TOPDIR/owrt-qti-conf/feeds_patches
-	if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
-		patches=$TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds_patches
+	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	echo "Using feeds for Prplos version:$PRPL_VERSION"
+		if [ "${2}" != "recovery" ]; then
+		feeds=(packages luci routing feed_wifi_swl)
+		fi
+        patches=$TOPDIR/owrt-qti-conf/P3/feeds_patches
+	elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+	echo "Using feeds for Openwrt version:$OWRT_VERSION"
+        patches=$TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds_patches
 	fi
 	for feed in ${feeds[@]}; do
 		for patch in $patches/$feed/*.patch; do
@@ -178,6 +187,20 @@ function update_configs(){
 				echo "$line" >> ".config"
 			fi
 		done < "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config"
+	fi
+	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] && [ -f "owrt-qti-conf/P3/${1}/${2}.config" ] ; then
+		IFS='='
+		#read line by line from owrt-qti-conf/P3/${1}/${2}.config
+		while read -r line; do
+			read -a configarr <<<"$line"
+			if grep  "${configarr[0]}=" ".config"
+			then
+				# if found
+				sed -i "s/${configarr[0]}=.*/$line/" .config
+			else
+				echo "$line" >> ".config"
+			fi
+		done < "owrt-qti-conf/P3/${1}/${2}.config"
 	fi
 }
 
@@ -366,6 +389,17 @@ function build_kernel(){
 	cd $TOPDIR
 }
 
+function run_gen_config(){
+
+	if [ "${2}" != "recovery" ]; then
+		if [ -f "profiles/${1}_${2}.yml" ]; then
+			./scripts/gen_config.py prpl ${1}_${2} || return
+		else
+			./scripts/gen_config.py prpl || return
+		fi
+	fi
+}
+
 # core function, used to configure OpenWrt enviroment for specific target, profile, variant
 # 	sets up upstream feeds, ensures patching of upstream feeds
 # 	based on target, profile, variant provided:
@@ -396,8 +430,9 @@ function configure(){
 	fi
 
 	echo "OWRT_VERSION: $OWRT_VERSION"
+	echo "PRPL_VERSION: $PRPL_VERSION"
 	## Add owrt version info in Makefile and package.mk
-	files_to_add_owrt_ver=("target/linux/${1}/Makefile" "include/package.mk")
+	files_to_add_owrt_ver=("target/linux/${1}/Makefile" "include/package.mk" "include/target.mk")
 	for files_to_update in ${files_to_add_owrt_ver[@]};
 	do
 		grep -q "OWRT_VERSION:=" $files_to_update
@@ -407,15 +442,25 @@ function configure(){
 		else
 			sed -i 's/OWRT_VERSION:=.*/OWRT_VERSION:='$OWRT_VERSION'/g' $files_to_update
 		fi
+		grep -q "PRPL_VERSION:=" $files_to_update
+		if [ $? -ne 0 ]
+		then
+			sed -i '1s/^/PRPL_VERSION:='$PRPL_VERSION'\n/' $files_to_update
+		else
+			sed -i 's/PRPL_VERSION:=.*/PRPL_VERSION:='$PRPL_VERSION'/g' $files_to_update
+		fi
 	done
 
 	set_up_feeds ${1} || return 1
-	patch_upstream_feeds || return 1
-	patch_openssl ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
 	cp owrt-qti-conf/${1}/${2}.config .config || return
 	update_configs ${1} ${2} || return
+	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+		run_gen_config ${1} ${2} || return
+	fi
+	patch_upstream_feeds ${1} ${2} || return 1
+	patch_openssl ${1} || return 1
 
 	#Create separate rootfs for recovery profile
 	if [ "${2}" == "recovery" ]; then
