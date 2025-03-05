@@ -40,7 +40,7 @@ endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
 
-UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping iperf3 bind bind-dig
+UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping iperf3 bind bind-dig usbutils
 
 COREBSP_UTILS:=pm-utils
 
