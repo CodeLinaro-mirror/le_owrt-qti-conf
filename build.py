@@ -279,6 +279,24 @@ def build_kw(profile):
             exit(0)
         exit(0)
 
+def generate_bin_ddm(profile):
+    # Generates the ddm.csv at release/ddm
+        ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
+        output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, args.target, profile, 'ddm.csv'))  # Path to save ddm.csv
+
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
+
+        # Run the script and capture its output
+        result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+        # Write stdout to ddm.csv
+        with open(output_csv, 'w') as f_csv:
+             f_csv.write(result.stdout)
+
+        # Print the path to the saved ddm.csv
+        print(f"BIN DDM generated and saved at: {output_csv}")
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
@@ -313,6 +331,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
             build('mbb-min')
+            if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
         elif args.profile == 'cpe':
             platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
             set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
@@ -332,21 +351,9 @@ if args.target == 'sdx75' or args.target == 'sdx85':
         else:
             build(args.profile)
 
-
+    
     if args.bin_ddm == 'true':
-        # Generates the ddm.csv at release/ddm
-        ddm_script = os.path.abspath(os.path.join(TOPDIR, '../release/ddm/scan-ddm.sh'))  # Construct the path to scan-ddm.sh relative to TOPDIR
-        output_csv = os.path.abspath(os.path.join(TOPDIR, 'bin', 'targets', args.variant, args.target, args.profile, 'ddm.csv'))  # Path to save ddm.csv
-
-        # Run the script and capture its output
-        result = subprocess.run(['sh', ddm_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-
-        # Write stdout to ddm.csv
-        with open(output_csv, 'w') as f_csv:
-             f_csv.write(result.stdout)
-
-        # Print the path to the saved ddm.csv
-        print(f"BIN DDM generated and saved at: {output_csv}")
+        generate_bin_ddm(args.profile)
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
