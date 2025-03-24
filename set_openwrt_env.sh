@@ -451,6 +451,7 @@ function configure(){
 			TARGET=sdxbaagha
 		fi
 		sed -i "s/BUILD_WITH_MEMOPT:=.*/BUILD_WITH_MEMOPT:=${BUILD_WITH_MEMOPT}/" target/linux/${1}/Makefile || return
+		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
 	if [ "${1}" == "sdx75" ]; then
