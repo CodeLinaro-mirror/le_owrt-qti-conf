@@ -117,7 +117,7 @@ function patch_upstream_feeds(){
 	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
 	echo "Using feeds for Prplos version:$PRPL_VERSION"
 		if [ "${2}" != "recovery" ]; then
-		feeds=(packages luci routing feed_wifi_swl)
+		feeds=(packages luci routing feed_amx feed_board_configuration feed_debug feed_gmap feed_lcm feed_net_core feed_net_hl_services feed_netmodel feed_net_services feed_opensource feed_peripheral feed_prpl feed_qos_firewall feed_tr69 feed_usp feed_wifi_core feed_wifi_swl)
 		fi
         patches=$TOPDIR/owrt-qti-conf/P3/feeds_patches
 	elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
