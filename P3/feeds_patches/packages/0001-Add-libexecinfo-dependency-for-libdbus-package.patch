@@ -1,0 +1,26 @@
+From 230a5f2b5c2e1a5d5ce76ab6ab229a3f4da40bfc Mon Sep 17 00:00:00 2001
+From: Naresh Pirati <quic_npirati@quicinc.com>
+Date: Fri, 19 Jan 2024 17:03:10 +0530
+Subject: [PATCH] Add libexecinfo dependency for libdbus package
+
+Signed-off-by: Naresh Pirati <quic_npirati@quicinc.com>
+---
+ utils/dbus/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/utils/dbus/Makefile b/utils/dbus/Makefile
+index 40ae4c1eba..7025275ad3 100644
+--- a/utils/dbus/Makefile
++++ b/utils/dbus/Makefile
+@@ -46,7 +46,7 @@ define Package/libdbus
+ $(call Package/dbus/Default)
+   CATEGORY:=Libraries
+   TITLE+= (library)
+-  DEPENDS:= +libpthread
++  DEPENDS:= +libpthread +libexecinfo
+ endef
+ 
+ define Package/libdbus/Description
+-- 
+2.17.1
+
