@@ -11,8 +11,10 @@ include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 include $(TOPDIR)/owrt-qti-bt/qtibt.mk
 include $(TOPDIR)/owrt-qti-bt-prop/qtibtprop.mk
+ifeq ($(PRPL_VERSION),)
 include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
 include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
+endif
 include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
 
 ifeq ($(BOARD),sdx85)
@@ -40,7 +42,7 @@ endif
 
 OPENWRT_STANDARD:=luci openssl-util diag
 
-UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping iperf3 bind bind-dig
+UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd ethtool pciutils iw-full fping iperf3 bind bind-dig usbutils
 
 COREBSP_UTILS:=pm-utils
 
