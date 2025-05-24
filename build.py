@@ -242,6 +242,7 @@ def build(profile):
     configure(args.target, profile, args.variant)
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
+        subprocess.run(['make', 'package/telux-lib/clean', 'package/telux-lib/compile'])
     try:
         if args.logging == 'true':
             subprocess.run(['make', '-j', str(args.nthreads), 'V=s'], check=True)
