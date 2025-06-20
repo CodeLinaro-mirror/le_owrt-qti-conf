@@ -1,0 +1,28 @@
+From 3db81f9359cb7fbd8ca173c33265b12222048c7b Mon Sep 17 00:00:00 2001
+From: Bijeesh B <bijeb@qti.qualcomm.com>
+Date: Mon, 9 Jun 2025 14:59:39 +0530
+Subject: [PATCH] hash value change for dnsmasq-prpl compilation
+
+Fix to resolve compilation issue of dnsmasq-prpl package of prpl.
+
+Signed-off-by: Bijeesh B <bijeb@qti.qualcomm.com>
+---
+ base/network/services/dnsmasq-prpl/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/base/network/services/dnsmasq-prpl/Makefile b/base/network/services/dnsmasq-prpl/Makefile
+index bc0e09f..f207c51 100644
+--- a/base/network/services/dnsmasq-prpl/Makefile
++++ b/base/network/services/dnsmasq-prpl/Makefile
+@@ -13,7 +13,7 @@ PKG_RELEASE:=1
+ PKG_VERSION:=gen_2.90_v0.2.3
+ PKG_SOURCE:=dnsmasq-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://gitlab.com/prpl-foundation/mirrors/dnsmasq/-/archive/$(PKG_VERSION)
+-PKG_HASH:=18762435b75cd86fdb9eb145c74a0608eb7e8c3bd0af1d4b08b1c9845bbddf16
++PKG_HASH:=skip
+ PKG_BUILD_DIR:=$(BUILD_DIR)/dnsmasq-$(PKG_VERSION)
+
+ PKG_LICENSE:=GPL-2.0
+--
+2.17.1
+

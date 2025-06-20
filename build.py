@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-#Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 #SPDX-License-Identifier: BSD-3-Clause-Clear
 
 import argparse
@@ -55,8 +55,8 @@ args = parser.parse_args()
 # Validate the arguments
 valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
-valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1','mbb-min', 'mbb-512']
-valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
+valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -310,6 +310,8 @@ if args.target == 'sdx75' or args.target == 'sdx85':
         elif args.profile == 'cpe':
             platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
             build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
+        elif args.profile == 'cpe-tarang':
+            build_kernel_platform(args.target, 'sdxkova.cpe.tarang', args.variant)  # build kernel with configured kernel platform
         elif args.profile == 'cpe-v1':
             build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
 
@@ -337,9 +339,13 @@ if args.target == 'sdx75' or args.target == 'sdx85':
             platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
             set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
             build('recovery')
+        elif args.profile == 'cpe-tarang':
+            set_kernel_target(args.target, 'sdxkova.cpe.tarang', args.variant)  # build kernel with configured kernel platform
+            build('recovery')
         elif args.profile == 'cpe-v1':
             set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
             build('recovery')
+
         elif args.profile == 'mbb-512':
             platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
             set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
