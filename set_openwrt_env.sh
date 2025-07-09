@@ -9,6 +9,7 @@ PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
 OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
 echo ${PRPL_VERSION}
+export PRPL_VERSION
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
@@ -471,36 +472,39 @@ function configure(){
 		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-			TARGET=sdxpinn
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
+		TARGET=sdxpinn-prpl
+	else
+		if [ "${1}" == "sdx75" ]; then
+			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+				TARGET=sdxpinn
+			fi
+			if [ "${2}" = "cpe" ]; then
+				TARGET=sdxpinn-cpe-wkk
+			fi
+			if [ "${2}" = "cpe-v1" ]; then
+				TARGET=sdxpinn-cpe-wkk-v1
+			fi
+			if [ "${2}" = "mbb-512" ]; then
+				TARGET=sdxpinn-512
+			fi
 		fi
-		if [ "${2}" = "cpe" ]; then
-			TARGET=sdxpinn-cpe-wkk
-		fi
-		if [ "${2}" = "cpe-v1" ]; then
-                        TARGET=sdxpinn-cpe-wkk-v1
-                fi
-		if [ "${2}" = "mbb-512" ]; then
-			TARGET=sdxpinn-512
+
+		if [ "${1}" == "sdx85" ]; then
+		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+		            TARGET=sdxkova
+		        fi
+		        if [ "${2}" = "cpe" ]; then
+		            TARGET=sdxkova.cpe.wkk
+		        fi
+		        if [ "${2}" = "cpe-tarang" ]; then
+		            TARGET=sdxkova.cpe.tarang
+		        fi
+		        if [ "${2}" = "mbb-512" ]; then
+		            TARGET=sdxkova.512
+		        fi
 		fi
 	fi
-
-	if [ "${1}" == "sdx85" ]; then
-	        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-	            TARGET=sdxkova
-	        fi
-	        if [ "${2}" = "cpe" ]; then
-	            TARGET=sdxkova.cpe.wkk
-	        fi
-	        if [ "${2}" = "cpe-tarang" ]; then
-	            TARGET=sdxkova.cpe.tarang
-	        fi
-	        if [ "${2}" = "mbb-512" ]; then
-	            TARGET=sdxkova.512
-	        fi
-	fi
-
 
 	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
 	# 	use case: build_all.sh in automation
