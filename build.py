@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-#Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 #SPDX-License-Identifier: BSD-3-Clause-Clear
 
 import argparse
@@ -10,6 +10,7 @@ import subprocess
 import time
 import re
 
+prpl_version=os.getenv("PRPL_VERSION")
 def get_owrt_root_path():
     """Get the path to the OpenWrt build system's root directory."""
     # Get the path of the current script
@@ -55,8 +56,8 @@ args = parser.parse_args()
 # Validate the arguments
 valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
-valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1','mbb-min', 'mbb-512']
-valid_profiles['sdx85'] = ['mbb', 'cpe', 'mbb-min', 'mbb-512']
+valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -215,13 +216,17 @@ def configure(target, profile, variant, disable_kernel='disable_kernel'):
     subprocess.run(cmd, check=True, cwd=TOPDIR, env=os.environ)
 
 def print_build_configuration(target, profile, variant):
-    message = "Configuring & building OpenWrt for:\n  Target: {}\n  Profile: {}\n  Variant: {}".format(target, profile, variant)
+    message_owrt = "Configuring & building OpenWrt for:\n  Target: {}\n  Profile: {}\n  Variant: {}".format(target, profile, variant)
+    message_prpl = "Configuring & building Prplos for:\n  Target: {}\n  Profile: {}\n  Variant: {}".format(target, profile, variant)
     line = '*' * 38
     print('#' * 42)
     time.sleep(0.25)
     print('# {} #'.format(line))
     time.sleep(0.25)
-    print('# {} '.format(message))
+    if prpl_version and prpl_version =='3.1':
+        print('# {} '.format(message_prpl))
+    else:
+        print('# {} '.format(message_owrt))
     time.sleep(0.25)
     print('# {} #'.format(line))
     time.sleep(0.25)
@@ -298,63 +303,72 @@ def generate_bin_ddm(profile):
         # Print the path to the saved ddm.csv
         print(f"BIN DDM generated and saved at: {output_csv}")
 
+
+def getKernelPlatform(target, profile):
+    if prpl_version and prpl_version =='3.1' and target == 'sdx75' :
+       platform = 'sdxpinn-prpl'
+    elif target == 'sdx75':
+        if profile == 'mbb' or profile == 'mbb-min':
+            platform = 'sdxpinn'
+        elif profile == 'cpe':
+            platform = 'sdxpinn-cpe-wkk'
+        elif profile == 'cpe-v1':
+            platform = 'sdxpinn-cpe-wkk-v1'
+        elif profile == 'mbb-512':
+            platform = 'sdxpinn-512'
+        else:
+            print("Invalid profile '{}' for target '{}'".format(profile, target))
+            print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+    elif target == 'sdx85':
+         if profile == 'mbb' or profile == 'mbb-min':
+            platform = 'sdxkova'
+         elif profile == 'cpe':
+            platform = 'sdxkova.cpe.wkk'
+         elif profile == 'cpe-tarang':
+            platform = 'sdxkova.cpe.tarang'
+         elif profile == 'mbb-512':
+            platform = 'sdxkova.512'
+         else:
+            print("Invalid profile '{}' for target '{}'".format(profile, target))
+            print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+    return platform
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
-if args.target == 'sdx75' or args.target == 'sdx85':
-    if args.automation == 'false':
-        # local build
-        if args.profile == 'mbb' or args.profile == 'mbb-min':
-            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
-            build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
-        elif args.profile == 'cpe':
-            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
-            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
-        elif args.profile == 'cpe-v1':
-            build_kernel_platform(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
 
-        elif args.profile == 'mbb-512':
-            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
-            build_kernel_platform(args.target, platform, args.variant)  # build kernel with configured kernel platform
-        else:
-            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
-            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+if args.target == 'sdx75' or args.target == 'sdx85':
+   platform = getKernelPlatform(args.target,args.profile)
+   # local build
+   if args.automation == 'false':
+      if args.profile == 'mbb' or args.profile == 'mbb-min' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-v1' or args.profile == 'mbb-512':
+        build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
+      else:
+         print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+         print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
 
 #       common build sequence for sdx75/sdx85 profiles
-        make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
-        consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
-        build('recovery')  # configure & build recovery profile
-        build(args.profile)  # configure & build args.profile profile
-    else:
-        #automation
-        if args.profile == 'mbb':
-            platform = 'sdxpinn' if args.target == 'sdx75' else 'sdxkova'
-            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-            build('recovery')
-            build('mbb-min')
-            if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
-        elif args.profile == 'cpe':
-            platform = 'sdxpinn-cpe-wkk' if args.target == 'sdx75' else 'sdxkova.cpe.wkk'
-            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-            build('recovery')
-        elif args.profile == 'cpe-v1':
-            set_kernel_target(args.target, 'sdxpinn-cpe-wkk-v1', args.variant)  # build kernel with configured kernel platform
-            build('recovery')
-        elif args.profile == 'mbb-512':
-            platform = 'sdxpinn-512' if args.target == 'sdx75' else 'sdxkova.512'
-            set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-            build('recovery')
-        else:
-            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
-            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
-        if args.kw == 'true':
-            build_kw(args.profile)
-        else:
-            build(args.profile)
-
-    
-    if args.bin_ddm == 'true':
-        generate_bin_ddm(args.profile)
+      make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
+      consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
+      build('recovery')  # configure & build recovery profile
+      build(args.profile)  # configure & build args.profile profile
+   else:
+   #automation
+       if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-v1' or args.profile == 'mbb-512':
+          set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
+          build('recovery')
+       else:
+           print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+           print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+       if args.profile == 'mbb':
+          build('mbb-min')
+       if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
+       if args.kw == 'true':
+          build_kw(args.profile)
+       else:
+          build(args.profile)
+   if args.bin_ddm == 'true':
+      generate_bin_ddm(args.profile) 
 
 # ------------------------ complete build sequence for sdx35 target ---------------------------------
 if args.target == 'sdx35':
