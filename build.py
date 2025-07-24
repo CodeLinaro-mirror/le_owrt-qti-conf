@@ -362,7 +362,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
        if args.profile == 'mbb':
           build('mbb-min')
-       if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
+          if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
        if args.kw == 'true':
           build_kw(args.profile)
        else:
