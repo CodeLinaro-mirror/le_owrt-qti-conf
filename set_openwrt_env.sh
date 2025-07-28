@@ -9,7 +9,6 @@ PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
 OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
 echo ${PRPL_VERSION}
-export PRPL_VERSION
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
