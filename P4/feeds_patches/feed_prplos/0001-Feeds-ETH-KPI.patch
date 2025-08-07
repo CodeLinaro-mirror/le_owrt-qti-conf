@@ -1,0 +1,402 @@
+From 418c792f6cd78e052302d141f8ddb6e22fe6cd4d Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Tue, 19 Aug 2025 23:16:25 +0530
+Subject: [PATCH] Feeds ETH KPI
+
+---
+ 0001-Boot-KPI-in-build.patch | 383 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 383 insertions(+)
+ create mode 100644 0001-Boot-KPI-in-build.patch
+
+diff --git a/0001-Boot-KPI-in-build.patch b/0001-Boot-KPI-in-build.patch
+new file mode 100644
+index 0000000..821051d
+--- /dev/null
++++ b/0001-Boot-KPI-in-build.patch
+@@ -0,0 +1,383 @@
++#This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
++#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++#SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From d37c84ba38e848749f1a08b85b4033e20f9eeb4d Mon Sep 17 00:00:00 2001
++From: Nazerin N <nazen@qti.qualcomm.com>
++Date: Tue, 19 Aug 2025 16:48:06 +0530
++Subject: [PATCH] Boot KPI in build
++
++---
++ src/dm_link_neigh.c | 326 ++++++++++++++++++++++++++++++++++++++++++++
++ 1 file changed, 326 insertions(+)
++
++diff --git a/src/dm_link_neigh.c b/src/dm_link_neigh.c
++index 34f0f0a..2a9ae8f 100644
++--- a/src/dm_link_neigh.c
+++++ b/src/dm_link_neigh.c
++@@ -71,8 +71,21 @@
++ #include "dm_netdev.h"
++ #include "dm_convert.h"
++ #include "dm_link_neigh.h"
+++#include <ctype.h>
++
++ #define ME "netdev"
+++#define BOOT_KPI_NODE "/sys/kernel/boot_kpi/kpi_values"
+++
+++// Macros for MAC address handling
+++#define MAC_ADDR_LENGTH 6
+++#define MAC_STR_LENGTH 18  // 17 chars + null terminator for MAC format
+++
+++#define ETH_PREFIX "eth"
+++#define ETH_PREFIX_LEN 3  // strlen("eth")
+++
+++// Simple flags to track if KPI has been marked for each IP family
+++static bool eth_ipv4_kpi_marked = false;
+++static bool eth_ipv6_kpi_marked = false;
++
++ static amxc_llist_t neighs = {NULL, NULL};
++
++@@ -366,6 +379,307 @@ exit:
++     amxc_var_clean(&notification_data);
++ }
++
+++
+++// Helper function to check if string is empty
+++static inline bool string_empty(const char* str) {
+++    return (str == NULL || str[0] == '\0');
+++}
+++
+++// Helper function to check if KPI should be marked
+++static bool should_mark_kpi(int ip_family, bool is_ethernet) {
+++    if (!is_ethernet) {
+++        return false;
+++    }
++
+++    switch (ip_family) {
+++        case AF_INET:
+++            return !eth_ipv4_kpi_marked;
+++        case AF_INET6:
+++            return !eth_ipv6_kpi_marked;
+++        default:
+++            return false;
+++    }
+++}
+++
+++// Helper function to set KPI as marked
+++static void set_kpi_marked(int ip_family) {
+++    switch (ip_family) {
+++        case AF_INET:
+++            eth_ipv4_kpi_marked = true;
+++            SAH_TRACEZ_INFO(ME, "Ethernet IPv4 KPI flag set");
+++            break;
+++        case AF_INET6:
+++            eth_ipv6_kpi_marked = true;
+++            SAH_TRACEZ_INFO(ME, "Ethernet IPv6 KPI flag set");
+++            break;
+++        default:
+++            break;
+++    }
+++}
+++
+++// Helper function to convert MAC address to string for comparison
+++static int mac_to_string(const lladdr_t* lladdr, char* mac_str, size_t buf_size) {
+++    if (!lladdr || !mac_str || buf_size < MAC_STR_LENGTH || lladdr->len < MAC_ADDR_LENGTH) {
+++        if (mac_str && buf_size > 0) mac_str[0] = '\0';
+++        return -1;
+++    }
+++
+++    snprintf(mac_str, buf_size, "%02x:%02x:%02x:%02x:%02x:%02x",
+++             lladdr->data[0], lladdr->data[1], lladdr->data[2],
+++             lladdr->data[3], lladdr->data[4], lladdr->data[5]);
+++    return 0;
+++}
+++
+++static bool mac_addresses_match(const char* mac1, const char* mac2) {
+++    if (!mac1 || !mac2) {
+++        return false;
+++    }
+++    // Case-insensitive comparison for MAC addresses
+++    return (strcasecmp(mac1, mac2) == 0);
+++}
+++
+++// Helper function to get device MAC address
+++static const char* get_device_mac(const amxc_var_t* device_data) {
+++    if (!device_data) {
+++        return NULL;
+++    }
+++
+++    const char* device_mac = GETP_CHAR(device_data, "PhysAddress");
+++    if (!device_mac || string_empty(device_mac)) {
+++        return NULL;
+++    }
+++
+++    return device_mac;
+++}
+++
+++// Helper function to get Layer1Interface
+++static const char* get_layer1_interface(const amxc_var_t* device_data) {
+++    if (!device_data) {
+++        return NULL;
+++    }
+++
+++    const char* layer1_interface = GETP_CHAR(device_data, "Layer1Interface");
+++    if (!layer1_interface || string_empty(layer1_interface)) {
+++        return NULL;
+++    }
+++
+++    return layer1_interface;
+++}
+++
+++// Helper function to get Layer2Interface
+++static const char* get_layer2_interface(const amxc_var_t* device_data) {
+++    if (!device_data) {
+++        return NULL;
+++    }
+++
+++    const char* layer2_interface = GETP_CHAR(device_data, "Layer2Interface");
+++    if (!layer2_interface || string_empty(layer2_interface)) {
+++        return NULL;
+++    }
+++
+++    return layer2_interface;
+++}
+++
+++// Helper function to check if interface is ethernet
+++static bool is_ethernet_interface(const char* layer1_interface, const char* layer2_interface) {
+++    bool is_ethernet = false;
+++
+++    // Check Layer1Interface for ethernet pattern
+++    if (layer1_interface && strstr(layer1_interface, "Device.Ethernet.Interface") != NULL) {
+++        is_ethernet = true;
+++    }
+++
+++    // Validate using Layer2Interface if available
+++    if (is_ethernet && layer2_interface) {
+++        if (strncmp(layer2_interface, ETH_PREFIX, ETH_PREFIX_LEN) == 0) {
+++            SAH_TRACEZ_INFO(ME, "Ethernet detection confirmed by Layer2Interface: %s", layer2_interface);
+++        }
+++    }
+++
+++    return is_ethernet;
+++}
+++
+++// Helper function to generate KPI message based on interface type and IP family
+++static const char* get_kpi_message(int ip_family, bool is_ethernet) {
+++    if (is_ethernet) {
+++        switch (ip_family) {
+++            case AF_INET:
+++                return "ETH Local IPV4 Assignment";
+++            case AF_INET6:
+++                return "ETH Local IPV6 Assignment";
+++            default:
+++                return NULL;
+++        }
+++    }
+++
+++    return NULL;
+++}
+++
+++// Helper function to mark Boot KPI
+++static int mark_boot_kpi(const char* kpi_message) {
+++    FILE* fp;
+++    int result = -1;
+++
+++    if (!kpi_message) {
+++        SAH_TRACEZ_ERROR(ME, "Invalid KPI message provided");
+++        return -1;
+++    }
+++
+++    fp = fopen(BOOT_KPI_NODE, "a");
+++    if (!fp) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to open KPI node file: %s", BOOT_KPI_NODE);
+++        return -1;
+++    }
+++
+++    if (fprintf(fp, "M - %s", kpi_message) > 0) {
+++        result = 0;
+++        SAH_TRACEZ_INFO(ME, "Boot KPI marked: %s", kpi_message);
+++    } else {
+++        SAH_TRACEZ_ERROR(ME, "Failed to write Boot KPI: %s", kpi_message);
+++    }
+++
+++    fclose(fp);
+++    return result;
+++}
+++
+++// Helper function to process device data and determine interface type
+++static int process_device_data(const char* neighbor_mac_str, bool* is_ethernet) {
+++    amxc_var_t devices_ret;
+++    amxc_var_init(&devices_ret);
+++
+++    amxb_bus_ctx_t* bus_ctx = amxb_be_who_has("Devices.Device.");
+++    if (!bus_ctx) {
+++        SAH_TRACEZ_ERROR(ME, "No bus context found for Devices.Device. - object path not available");
+++        amxc_var_clean(&devices_ret);
+++        return -1;
+++    }
+++
+++    int devices_rv = amxb_get(bus_ctx, "Devices.Device.", 0, &devices_ret, 5);
+++    if (AMXB_STATUS_OK != devices_rv) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to retrieve Devices.Device. data, reason: %d", devices_rv);
+++        amxc_var_clean(&devices_ret);
+++        return -1;
+++    }
+++
+++    const amxc_var_t* devices_array = &devices_ret;
+++
+++    if (amxc_var_type_of(devices_array) != AMXC_VAR_ID_LIST) {
+++        SAH_TRACEZ_ERROR(ME, "devices_ret is not a list type, it's type: %u", amxc_var_type_of(devices_array));
+++        amxc_var_clean(&devices_ret);
+++        return -1;
+++    }
+++
+++    // Get the first element of the array which should contain the hash table
+++    const amxc_var_t* first_element = amxc_var_get_index(devices_array, 0, AMXC_VAR_FLAG_DEFAULT);
+++    if (!first_element || amxc_var_type_of(first_element) != AMXC_VAR_ID_HTABLE) {
+++        SAH_TRACEZ_ERROR(ME, "First element is not a hash table or is NULL");
+++        amxc_var_clean(&devices_ret);
+++        return -1;
+++    }
+++
+++    const amxc_htable_t* devices_table = amxc_var_constcast(amxc_htable_t, first_element);
+++    if (!devices_table) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to cast first element to hash table");
+++        amxc_var_clean(&devices_ret);
+++        return -1;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "Successfully extracted devices hash table with %zu items", devices_table->items);
+++
+++    int result = -1;
+++    amxc_htable_for_each(device_it, devices_table) {
+++        const char* device_index = amxc_htable_it_get_key(device_it);
+++        const amxc_var_t* device_data = amxc_var_from_htable_it(device_it);
+++
+++        if (!device_data) {
+++            continue;
+++        }
+++
+++        // Get device MAC address
+++        const char* device_mac = get_device_mac(device_data);
+++        if (!device_mac) {
+++            continue;
+++        }
+++
+++        // Compare MAC addresses
+++        if (mac_addresses_match(neighbor_mac_str, device_mac)) {
+++            SAH_TRACEZ_INFO(ME, "MAC match found for device: %s", device_index);
+++
+++            // Get Layer1Interface and Layer2Interface to determine interface type
+++            const char* layer1_interface = get_layer1_interface(device_data);
+++            const char* layer2_interface = get_layer2_interface(device_data);
+++
+++            // Determine interface type
+++            *is_ethernet = is_ethernet_interface(layer1_interface, layer2_interface);
+++
+++            if (*is_ethernet) {
+++                SAH_TRACEZ_INFO(ME, "Ethernet interface detected via Layer1Interface: %s",
+++                               layer1_interface ? layer1_interface : "N/A");
+++            }
+++
+++            result = 0;
+++            break;
+++        }
+++    }
+++
+++    amxc_var_clean(&devices_ret);
+++    return result;
+++}
+++
+++// Helper function to determine interface type by checking bridge table entries
+++static int handle_boot_kpi_marking(neigh_t* neigh) {
+++    char neighbor_mac_str[MAC_STR_LENGTH] = {0};
+++    bool is_ethernet = false;
+++    const char* kpi_message = NULL;
+++
+++    if (!neigh) {
+++        SAH_TRACEZ_ERROR(ME, "Invalid neighbor pointer provided");
+++        return -1;
+++    }
+++
+++    // Convert neighbor MAC address to string
+++    if (mac_to_string(&neigh->lladdr, neighbor_mac_str, sizeof(neighbor_mac_str)) != 0) {
+++        SAH_TRACEZ_INFO(ME, "Neighbor has no MAC address, skipping KPI marking");
+++        return -1;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "Processing neighbor MAC: %s on NetDev index: %d", neighbor_mac_str, neigh->link);
+++
+++    // Process device data to determine interface type
+++    if (process_device_data(neighbor_mac_str, &is_ethernet) != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to process device data");
+++        return -1;
+++    }
+++
+++    // Check if KPI should be marked
+++    if (!should_mark_kpi(neigh->family, is_ethernet)) {
+++        SAH_TRACEZ_INFO(ME, "KPI already marked for this interface type and IP family, skipping");
+++        return 0;
+++    }
+++
+++    // Get KPI message based on interface type and IP family
+++    kpi_message = get_kpi_message(neigh->family, is_ethernet);
+++
+++    if (kpi_message) {
+++        if (mark_boot_kpi(kpi_message) == 0) {
+++            // Set the flag to prevent future markings
+++            set_kpi_marked(neigh->family);
+++
+++            const char* ip_family_str = (neigh->family == AF_INET) ? "IPv4" :
+++                                       (neigh->family == AF_INET6) ? "IPv6" : "Unknown";
+++            SAH_TRACEZ_INFO(ME, "Boot KPI marked for Ethernet %s assignment (neighbor MAC: %s)",
+++                           ip_family_str, neighbor_mac_str);
+++            return 0;
+++        } else {
+++            SAH_TRACEZ_ERROR(ME, "Failed to mark Boot KPI");
+++            return -1;
+++        }
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "No applicable KPI message for neighbor");
+++    return 0;
+++}
+++
++ int handleNewNeigh(rtnlmsg_t* msg) {
++     SAH_TRACEZ_IN(ME);
++     int rv = -1;
++@@ -377,6 +691,7 @@ int handleNewNeigh(rtnlmsg_t* msg) {
++     deferred_trans_t* deferred_trans = NULL;
++     amxd_trans_t* transaction = NULL;
++     amxc_var_t var_deferred_data;
+++    bool is_new_neighbor = false;
++
++     amxc_var_init(&var_deferred_data);
++     amxc_var_set_type(&var_deferred_data, AMXC_VAR_ID_HTABLE);
++@@ -399,9 +714,19 @@ int handleNewNeigh(rtnlmsg_t* msg) {
++         amxc_var_add_key(bool, &var_deferred_data, "new_instance", true);
++         amxc_var_add_key(cstring_t, &var_deferred_data, "pathbuf", pathbuf);
++         SAH_TRACEZ_INFO(ME, "pathbuf = %s", pathbuf);
+++        is_new_neighbor = true;
++     }
++     neigh_copy(neigh, &ws);
++
+++// Boot KPI marking logic - only for new neighbors during boot
+++    if (is_new_neighbor) {
+++        SAH_TRACEZ_INFO(ME, "Processing Boot KPI for new neighbor on link %d", neigh->link);
+++        if (handle_boot_kpi_marking(neigh) != 0) {
+++            SAH_TRACEZ_ERROR(ME, "Failed to handle Boot KPI marking");
+++            // Continue execution as this is not a fatal error
+++        }
+++    }
+++
++     transaction = create_transaction_from_neigh(neigh, GET_BOOL(&var_deferred_data, "new_instance"));
++
++     deferred_trans_create(&deferred_trans, transaction, neigh);
++@@ -619,3 +944,4 @@ amxd_status_t _neigh_destroy(amxd_object_t* object,
++ exit:
++     return status;
++ }
+++
++--
++2.17.1
++
+--
+2.17.1
+
