@@ -10,7 +10,6 @@ import subprocess
 import time
 import re
 
-prpl_version=os.getenv("PRPL_VERSION")
 def get_owrt_root_path():
     """Get the path to the OpenWrt build system's root directory."""
     # Get the path of the current script
@@ -215,6 +214,25 @@ def configure(target, profile, variant, disable_kernel='disable_kernel'):
     cmd = ['bash', '-c', 'source {} && configure {} {} {} {}'.format(source_script, target, profile, variant, disable_kernel)]
     subprocess.run(cmd, check=True, cwd=TOPDIR, env=os.environ)
 
+def get_prpl_version():
+    try:
+        # Open and read the owrt/include/version.mk file
+        include_file_path = '{}/include/version.mk'.format(TOPDIR)
+        with open(include_file_path, 'r') as include_file:
+             include_file_contents = include_file.read()
+
+        # Use expressions to extract the value of PRPL_VERSION_NUMBER
+        match_version = re.search(r'PRPL_VERSION_NUMBER[^,]*,\s*([0-9]+\.[0-9]+)', include_file_contents)
+        if match_version:
+            return match_version.group(1)
+        else:
+            print("Warning: Could not find PRPL_VERSION_NUMBER in version.mk file")
+            return None
+
+    except (FileNotFoundError, IOError, re.error) as e:
+        print("Error reading PRPL version: {}".format(e))
+        return None
+
 def print_build_configuration(target, profile, variant):
     message_owrt = "Configuring & building OpenWrt for:\n  Target: {}\n  Profile: {}\n  Variant: {}".format(target, profile, variant)
     message_prpl = "Configuring & building Prplos for:\n  Target: {}\n  Profile: {}\n  Variant: {}".format(target, profile, variant)
@@ -333,6 +351,7 @@ def getKernelPlatform(target, profile):
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
     return platform
 
+prpl_version = get_prpl_version()
 print_build_configuration(args.target, args.profile, args.variant)
 
 # ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
@@ -362,7 +381,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
        if args.profile == 'mbb':
           build('mbb-min')
-       if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
+          if args.bin_ddm == 'true': generate_bin_ddm('mbb-min')
        if args.kw == 'true':
           build_kw(args.profile)
        else:
