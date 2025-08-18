@@ -9,7 +9,6 @@ PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
 OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
 echo ${PRPL_VERSION}
-export PRPL_VERSION
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
@@ -159,20 +158,6 @@ function update_configs(){
 				echo "$line" >> ".config"
 			fi
 		done < "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config"
-	fi
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] && [ -f "owrt-qti-conf/P3/${1}/${2}.config" ] ; then
-		IFS='='
-		#read line by line from owrt-qti-conf/P3/${1}/${2}.config
-		while read -r line; do
-			read -a configarr <<<"$line"
-			if grep  "${configarr[0]}=" ".config"
-			then
-				# if found
-				sed -i "s/${configarr[0]}=.*/$line/" .config
-			else
-				echo "$line" >> ".config"
-			fi
-		done < "owrt-qti-conf/P3/${1}/${2}.config"
 	fi
 }
 
@@ -427,10 +412,12 @@ function configure(){
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	cp owrt-qti-conf/${1}/${2}.config .config || return
-	update_configs ${1} ${2} || return
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
+		cp owrt-qti-conf/P3/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+	else
+		cp owrt-qti-conf/${1}/${2}.config .config || return
+		update_configs ${1} ${2} || return
 	fi
 	patch_upstream_feeds ${1} ${2} || return 1
 	patch_openssl ${1} || return 1
