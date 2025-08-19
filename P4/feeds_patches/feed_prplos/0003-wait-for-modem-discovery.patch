@@ -1,0 +1,93 @@
+From 16bd475fbd9e19183a29e20ab86c6fdc50b512ae Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Tue, 26 Aug 2025 15:21:52 +0530
+Subject: [PATCH] wait-for-modem-discovery
+
+---
+ .../0003-wait-for-modem-discovery.patch       | 74 +++++++++++++++++++
+ 1 file changed, 74 insertions(+)
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0003-wait-for-modem-discovery.patch
+
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0003-wait-for-modem-discovery.patch b/net_core/mods/mod-cellular-libmm/patches/0003-wait-for-modem-discovery.patch
+new file mode 100644
+index 0000000..944dfc6
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0003-wait-for-modem-discovery.patch
+@@ -0,0 +1,74 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 80a28bf96740d654a92c2216d4112297dbf70b9b Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Tue, 26 Aug 2025 11:53:13 +0530
++Subject: [PATCH] wait-for-modem-discovery
++
++---
++ src/mod_cellular-libmm.c | 32 ++++++++++++++++++++++++++++++--
++ 1 file changed, 30 insertions(+), 2 deletions(-)
++
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index fced93b..07884cc 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -78,6 +78,7 @@
++ #define MODEM_RECONNECT_PERIOD      30   /* seconds */
++ #define ICCID_MIN_LENGTH 6
++ #define DEFAULT_CELLULAR_INTERFACE "rmnet_ipa0"
+++#define MODEM_ASSIGNMENT_RETRY_INTERVAL_MS 1000
++ 
++ static GMutex libmm_lock;
++ static GDBusConnection* libmm_connection = NULL;
++@@ -1049,14 +1050,41 @@ exit:
++ }
++ 
++ static int assign_modem_to_cell_iface(libmm_cell_iface_t* cell_iface) {
++-    GList* modems = libmm_get_modems();
++-    GList* elem = modems;
+++    GList* modems = NULL;
+++    GList* elem = NULL;
++     bool match_netdev_name = false;
++     int rv = -1;
+++    int attempt = 1;
++ 
++     when_null_trace(cell_iface, exit, ERROR, "Interface can not be null, invalid argument");
++     when_str_empty_trace(cell_iface->netdev_name, exit, ERROR, "Empty netdev, invalid argument");
++ 
+++    SAH_TRACEZ_INFO(ME, "Starting modem assignment for iface %s, netdev %s",
+++                    cell_iface->object_path, cell_iface->netdev_name);
+++
+++    // Infinite loop to wait for modems to be discovered
+++    while (true) {
+++        modems = libmm_get_modems();
+++
+++        SAH_TRACEZ_INFO(ME, "Attempt %d: Retrieved %d modem(s) from libmm_manager",
+++                        attempt, g_list_length(modems));
+++
+++        if (g_list_length(modems) > 0) {
+++            // Modems found, proceed to assignment
+++            break;
+++        }
+++
+++        g_list_free_full(modems, g_object_unref);
+++        modems = NULL;
+++
+++        SAH_TRACEZ_INFO(ME, "No modems found, waiting %d ms before retry", MODEM_ASSIGNMENT_RETRY_INTERVAL_MS);
+++        g_usleep(MODEM_ASSIGNMENT_RETRY_INTERVAL_MS * 1000);
+++        attempt++;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "Processing %d modem(s) for assignment", g_list_length(modems));
+++    elem = modems;
+++
++     /*
++      * Assign the modem to the cell iface with matching netdev name.
++      * Check that name is not referred in any cell_iface.
++-- 
++2.34.1
++
+-- 
+2.34.1
+
