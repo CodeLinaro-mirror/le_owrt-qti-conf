@@ -241,7 +241,7 @@ def print_build_configuration(target, profile, variant):
     time.sleep(0.25)
     print('# {} #'.format(line))
     time.sleep(0.25)
-    if prpl_version and prpl_version =='3.1':
+    if prpl_version and prpl_version =='4.0':
         print('# {} '.format(message_prpl))
     else:
         print('# {} '.format(message_owrt))
@@ -323,7 +323,7 @@ def generate_bin_ddm(profile):
 
 
 def getKernelPlatform(target, profile):
-    if prpl_version and prpl_version =='3.1' and target == 'sdx75' :
+    if prpl_version and prpl_version =='4.0' and target == 'sdx75' :
        platform = 'sdxpinn-prpl'
     elif target == 'sdx75':
         if profile == 'mbb' or profile == 'mbb-min':
