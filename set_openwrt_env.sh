@@ -159,20 +159,6 @@ function update_configs(){
 			fi
 		done < "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config"
 	fi
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] && [ -f "owrt-qti-conf/P3/${1}/${2}.config" ] ; then
-		IFS='='
-		#read line by line from owrt-qti-conf/P3/${1}/${2}.config
-		while read -r line; do
-			read -a configarr <<<"$line"
-			if grep  "${configarr[0]}=" ".config"
-			then
-				# if found
-				sed -i "s/${configarr[0]}=.*/$line/" .config
-			else
-				echo "$line" >> ".config"
-			fi
-		done < "owrt-qti-conf/P3/${1}/${2}.config"
-	fi
 }
 
 verify_target_configuration(){
@@ -426,10 +412,12 @@ function configure(){
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	cp owrt-qti-conf/${1}/${2}.config .config || return
-	update_configs ${1} ${2} || return
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
+		cp owrt-qti-conf/P3/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+	else
+		cp owrt-qti-conf/${1}/${2}.config .config || return
+		update_configs ${1} ${2} || return
 	fi
 	patch_upstream_feeds ${1} ${2} || return 1
 	patch_openssl ${1} || return 1
@@ -471,36 +459,39 @@ function configure(){
 		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-			TARGET=sdxpinn
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
+		TARGET=sdxpinn-prpl
+	else
+		if [ "${1}" == "sdx75" ]; then
+			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+				TARGET=sdxpinn
+			fi
+			if [ "${2}" = "cpe" ]; then
+				TARGET=sdxpinn-cpe-wkk
+			fi
+			if [ "${2}" = "cpe-v1" ]; then
+				TARGET=sdxpinn-cpe-wkk-v1
+			fi
+			if [ "${2}" = "mbb-512" ]; then
+				TARGET=sdxpinn-512
+			fi
 		fi
-		if [ "${2}" = "cpe" ]; then
-			TARGET=sdxpinn-cpe-wkk
-		fi
-		if [ "${2}" = "cpe-v1" ]; then
-                        TARGET=sdxpinn-cpe-wkk-v1
-                fi
-		if [ "${2}" = "mbb-512" ]; then
-			TARGET=sdxpinn-512
+
+		if [ "${1}" == "sdx85" ]; then
+		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+		            TARGET=sdxkova
+		        fi
+		        if [ "${2}" = "cpe" ]; then
+		            TARGET=sdxkova.cpe.wkk
+		        fi
+		        if [ "${2}" = "cpe-tarang" ]; then
+		            TARGET=sdxkova.cpe.tarang
+		        fi
+		        if [ "${2}" = "mbb-512" ]; then
+		            TARGET=sdxkova.512
+		        fi
 		fi
 	fi
-
-	if [ "${1}" == "sdx85" ]; then
-	        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-	            TARGET=sdxkova
-	        fi
-	        if [ "${2}" = "cpe" ]; then
-	            TARGET=sdxkova.cpe.wkk
-	        fi
-	        if [ "${2}" = "cpe-tarang" ]; then
-	            TARGET=sdxkova.cpe.tarang
-	        fi
-	        if [ "${2}" = "mbb-512" ]; then
-	            TARGET=sdxkova.512
-	        fi
-	fi
-
 
 	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
 	# 	use case: build_all.sh in automation
