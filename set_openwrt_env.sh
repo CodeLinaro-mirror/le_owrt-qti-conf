@@ -481,7 +481,7 @@ function configure(){
 		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 		            TARGET=sdxkova
 		        fi
-		        if [ "${2}" = "cpe" ]; then
+		        if [ "${2}" = "cpe" ] || [ "${2}" = "cpe-v1" ] ; then
 		            TARGET=sdxkova.cpe.wkk
 		        fi
 		        if [ "${2}" = "cpe-tarang" ]; then
