@@ -1,0 +1,75 @@
+From 3970422d67ea8135059bbbc6cdb936977225136f Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Thu, 21 Aug 2025 17:46:27 +0530
+Subject: [PATCH] MTU size fix in feeds
+
+---
+ .../patches/0001-MTU-fix-in-build.patch       | 56 +++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+ create mode 100644 net_core/plugins/ip-manager/patches/0001-MTU-fix-in-build.patch
+
+diff --git a/net_core/plugins/ip-manager/patches/0001-MTU-fix-in-build.patch b/net_core/plugins/ip-manager/patches/0001-MTU-fix-in-build.patch
+new file mode 100644
+index 0000000..ffae7f4
+--- /dev/null
++++ b/net_core/plugins/ip-manager/patches/0001-MTU-fix-in-build.patch
+@@ -0,0 +1,56 @@
++This patch file is from Qualcomm Innovation Center, Inc. and is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 9b7f76e6e78a39858cd796e7c9aec4cdd029f96a Mon Sep 17 00:00:00 2001
++From: Nazerin N <nazen@qti.qualcomm.com>
++Date: Fri, 8 Aug 2025 15:31:59 +0530
++Subject: [PATCH] MTU fix in build
++
++---
++ src/ip_manager_interface.c | 19 +++++++++++++------
++ 1 file changed, 13 insertions(+), 6 deletions(-)
++
++diff --git a/src/ip_manager_interface.c b/src/ip_manager_interface.c
++index 270bc25..6f2ca25 100644
++--- a/src/ip_manager_interface.c
+++++ b/src/ip_manager_interface.c
++@@ -1039,22 +1039,29 @@ void _set_max_mtu_size(UNUSED const char* const sig_name,
++     SAH_TRACEZ_IN(ME);
++     amxd_object_t* intf_obj = amxd_dm_signal_get_object(ip_manager_get_dm(), data);
++     ip_intf_info_t* intf = NULL;
++-
+++    char *intf_name = NULL;
+++
++     when_null_trace(intf_obj, exit, ERROR, "Interface object is NULL");
++     intf = (ip_intf_info_t*) intf_obj->priv;
++     when_null_trace(intf, exit, ERROR, "Interface object has no private data");
++-
+++
+++    intf_name = amxd_object_get_value(cstring_t, intf_obj, "Name", NULL);           //Added
+++    SAH_TRACEZ_INFO(ME, "Interface name: %s, Netdev known: %d",
+++                    amxd_object_get_name(intf_obj, AMXD_OBJECT_NAMED),
+++                    netdev_name_known(intf_obj));
++     when_false_trace(netdev_name_known(intf_obj), exit, INFO, "NetDev name not known, can't set MTUSize");
++-    SAH_TRACEZ_INFO(ME, "Changing MTU from '%d' to '%d' on '%s'",
+++
+++    SAH_TRACEZ_INFO(ME, "Changing MTU from '%d' to '%d' on '%s' (mtu_intf_name: %s)",
++                     GETP_UINT32(data, "parameters.MaxMTUSize.from"),
++                     GETP_UINT32(data, "parameters.MaxMTUSize.to"),
++-                    amxd_object_get_name(intf_obj, AMXD_OBJECT_NAMED));
++-
++-    when_failed_trace(mod_set_mtu(intf->mtu_intf_name, GETP_UINT32(data, "parameters.MaxMTUSize.to")),
+++                    amxd_object_get_name(intf_obj, AMXD_OBJECT_NAMED),intf_name);
+++
+++    when_failed_trace(mod_set_mtu(intf_name, GETP_UINT32(data, "parameters.MaxMTUSize.to")),
++                       exit, ERROR, "Failed to update MTU for interface '%s'", amxd_object_get_name(intf_obj, AMXD_OBJECT_NAMED));
++
++ exit:
++     SAH_TRACEZ_OUT(ME);
+++  if(intf_name) free(intf_name);                   //Added
++     return;
++ }
++
++--
++2.17.1
++
+--
+2.17.1
+
