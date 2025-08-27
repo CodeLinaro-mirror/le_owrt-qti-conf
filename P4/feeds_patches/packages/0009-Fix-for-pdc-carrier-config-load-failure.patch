@@ -1,0 +1,52 @@
+From 187c9aa0dad45b074d11644282229059bd8ca656 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 16:16:02 +0530
+Subject: [PATCH] Fix-for-pdc-carrier-config-load-failure
+
+---
+ ...-for-pdc-carrier-config-load-failure.patch | 33 +++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+ create mode 100644 net/modemmanager/patches/0006-Fix-for-pdc-carrier-config-load-failure.patch
+
+diff --git a/net/modemmanager/patches/0006-Fix-for-pdc-carrier-config-load-failure.patch b/net/modemmanager/patches/0006-Fix-for-pdc-carrier-config-load-failure.patch
+new file mode 100644
+index 0000000..aa960a8
+--- /dev/null
++++ b/net/modemmanager/patches/0006-Fix-for-pdc-carrier-config-load-failure.patch
+@@ -0,0 +1,33 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 8c3f3ffa9a7dcb645e791fa1924440daa34f761a Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 09:51:33 +0530
++Subject: [PATCH] Fix for pdc_carrier_config load failure
++
++---
++ src/mm-shared-qmi.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/src/mm-shared-qmi.c b/src/mm-shared-qmi.c
++index 44c1a31..f290cda 100644
++--- a/src/mm-shared-qmi.c
+++++ b/src/mm-shared-qmi.c
++@@ -3141,7 +3141,10 @@ list_configs_indication (QmiClientPdc                      *client,
++         input = qmi_message_pdc_get_config_info_input_new ();
++         qmi_message_pdc_get_config_info_input_set_type_with_id_v2 (input, element->config_type, current_info->id, NULL);
++         qmi_message_pdc_get_config_info_input_set_token (input, current_info->token, NULL);
+++        /* Added total of 10ms delay before the next PDC get call to prevent request failures from rapid successive calls. */
+++        usleep(5000);
++         qmi_client_pdc_get_config_info (ctx->client, input, 10, NULL, NULL, NULL); /* ignore response! */
+++        usleep(5000);
++     }
++ }
++ 
++-- 
++2.34.1
++
+-- 
+2.34.1
+
