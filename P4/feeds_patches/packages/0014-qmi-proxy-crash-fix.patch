@@ -1,0 +1,56 @@
+From 71b96cf989b5ae57057839231ebc6cf580d79faf Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 15:59:58 +0530
+Subject: [PATCH] qmi-proxy-crash-fix
+
+---
+ .../patches/0001-QMI_PROXY_CRASH_FIX.patch    | 37 +++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+ create mode 100644 libs/libqrtr-glib/patches/0001-QMI_PROXY_CRASH_FIX.patch
+
+diff --git a/libs/libqrtr-glib/patches/0001-QMI_PROXY_CRASH_FIX.patch b/libs/libqrtr-glib/patches/0001-QMI_PROXY_CRASH_FIX.patch
+new file mode 100644
+index 0000000..b783ffa
+--- /dev/null
++++ b/libs/libqrtr-glib/patches/0001-QMI_PROXY_CRASH_FIX.patch
+@@ -0,0 +1,37 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 348fbd862d8480b40bb656f3fca32395d5cdb214 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 15:57:40 +0530
++Subject: [PATCH] QMI_PROXY_CRASH_FIX
++
++---
++ src/libqrtr-glib/qrtr-client.c | 8 ++++++++
++ 1 file changed, 8 insertions(+)
++
++diff --git a/src/libqrtr-glib/qrtr-client.c b/src/libqrtr-glib/qrtr-client.c
++index 3c8de1b..cd968d5 100644
++--- a/src/libqrtr-glib/qrtr-client.c
+++++ b/src/libqrtr-glib/qrtr-client.c
++@@ -136,6 +136,14 @@ qrtr_message_cb (GSocket      *gsocket,
++ 
++     bytes_received = g_socket_receive_from (gsocket, &addr, (gchar *)buf->data,
++                                             next_datagram_size, NULL, &error);
+++
+++    if ((bytes_received == 0) || (buf->data == NULL))
+++    {
+++        g_debug ("[qrtr client %u:%u] no bytes received",
+++             qrtr_node_get_id (self->priv->node), self->priv->port);
+++        return TRUE;
+++    }
+++
++     if (bytes_received < 0) {
++         g_warning ("[qrtr client %u:%u] socket i/o failure: %s",
++                    qrtr_node_get_id (self->priv->node), self->priv->port, error->message);
++-- 
++2.34.1
++
+-- 
+2.34.1
+
