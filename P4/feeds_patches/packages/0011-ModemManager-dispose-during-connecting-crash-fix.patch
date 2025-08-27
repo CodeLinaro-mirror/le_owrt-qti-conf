@@ -1,0 +1,64 @@
+From 118e42785b5a956886e9afd703f66576e1415bce Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 10:33:20 +0530
+Subject: [PATCH] ModemManager dispose during connecting crash fix
+
+---
+ ...-dispose-during-connecting-crash-fix.patch | 45 +++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+ create mode 100644 net/modemmanager/patches/0008-ModemManager-dispose-during-connecting-crash-fix.patch
+
+diff --git a/net/modemmanager/patches/0008-ModemManager-dispose-during-connecting-crash-fix.patch b/net/modemmanager/patches/0008-ModemManager-dispose-during-connecting-crash-fix.patch
+new file mode 100644
+index 0000000..d67bc26
+--- /dev/null
++++ b/net/modemmanager/patches/0008-ModemManager-dispose-during-connecting-crash-fix.patch
+@@ -0,0 +1,45 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From b124b97571556036314122d3fa068e5be75176e2 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 10:30:05 +0530
++Subject: [PATCH] ModemManager dispose during connecting crash fix
++
++---
++ src/mm-bearer-qmi.c | 16 ++++++++++++++++
++ 1 file changed, 16 insertions(+)
++
++diff --git a/src/mm-bearer-qmi.c b/src/mm-bearer-qmi.c
++index 54f2e93..cbf0475 100644
++--- a/src/mm-bearer-qmi.c
+++++ b/src/mm-bearer-qmi.c
++@@ -2994,6 +2994,22 @@ static void
++ dispose (GObject *object)
++ {
++     MMBearerQmi *self = MM_BEARER_QMI (object);
+++    MMBaseBearer *base_bearer = MM_BASE_BEARER(self);
+++    MMModemState state = MM_MODEM_STATE_UNKNOWN;
+++
+++    state = mm_base_bearer_get_status (base_bearer);
+++
+++    /* Cancel cancellable object if modem is in connecting state */
+++    if(MM_MODEM_STATE_CONNECTING == state)
+++    {
+++        mm_obj_info(self,"Modem state is (%d) on dispose",state);
+++
+++        if(self->priv->ongoing_connect_user_cancellable)
+++            g_cancellable_cancel (self->priv->ongoing_connect_user_cancellable);
+++
+++        if(self->priv->ongoing_connect_network_cancellable)
+++            g_cancellable_cancel (self->priv->ongoing_connect_network_cancellable);
+++    }
++ 
++     g_assert (!self->priv->ongoing_connect_user_cancellable);
++     g_assert (!self->priv->ongoing_connect_network_cancellable);
++-- 
++2.34.1
++
+-- 
+2.34.1
+
