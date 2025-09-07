@@ -1,0 +1,126 @@
+From 80502ea5d2f46cf223866f3767eb883efe34b1fa Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Mon, 4 Aug 2025 11:54:45 +0530
+Subject: [PATCH] cm reboot issue fix
+
+---
+ .../patches/0002-reboot-issue-fix.patch       | 107 ++++++++++++++++++
+ 1 file changed, 107 insertions(+)
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0002-reboot-issue-fix.patch
+
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0002-reboot-issue-fix.patch b/net_core/mods/mod-cellular-libmm/patches/0002-reboot-issue-fix.patch
+new file mode 100644
+index 0000000..8767b4f
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0002-reboot-issue-fix.patch
+@@ -0,0 +1,107 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index f2964a4..b552e0b 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -150,6 +150,9 @@ static void detach_modem_from_cell_iface(libmm_cell_iface_t* cell_iface) {
++     when_null(cell_iface, exit);
++     SAH_TRACEZ_NOTICE(ME, "Detach modem %s from libmm cell iface %s", cell_iface->name, cell_iface->object_path);
++ 
+++    /* reset the network device name to a default value on modem detach*/
+++    g_strlcpy(cell_iface->netdev_name, DEFAULT_CELLULAR_INTERFACE, sizeof(cell_iface->netdev_name));
+++
++     /* Remove bearer information */
++     if(cell_iface->bearer.name[0]) {
++         memset(cell_iface->bearer.name, 0, sizeof(cell_iface->bearer.name));
++@@ -201,7 +204,6 @@ error:
++     amxc_llist_for_each(it, libmm_cell_ifaces) {
++         cell_iface = amxc_container_of(it, libmm_cell_iface_t, it);
++ 
++-        strncpy(cell_iface->netdev_name, DEFAULT_CELLULAR_INTERFACE, sizeof(cell_iface->netdev_name));
++         detach_modem_from_cell_iface(cell_iface);
++ 
++         /* Instruct cellular manager to update Cellular.Interface object state */
++@@ -1312,7 +1314,8 @@ int libmm_iface_set(UNUSED const char* function_name,
++                 mm_bearer_properties_set_password(cell_iface->bearer_properties, GET_CHAR(args, "Password"));
++                 if(modem) {
++                     run_result = mm_modem_run_sync(modem, cell_iface, TRUE);
++-                    strcpy(cell_iface->status, run_result ? "Up" : "Error");
+++                    if(!run_result)
+++                        g_strlcpy(cell_iface->status, "Error", sizeof(cell_iface->status));
++                 }
++             } else {
++                 SAH_TRACEZ_ERROR(ME, "mm_bearer_properties_new returns NULL");
++@@ -1558,7 +1561,10 @@ int libmm_bearer_retrieve(UNUSED const char* function_name,
++     cell_iface = find_libmm_cell_iface_by_object_path(obj_path);
++     when_null_trace(cell_iface, exit, ERROR, "libmm cell interface %s not found", obj_path);
++ 
++-    if(cell_iface->bearer_object) {
+++    /* Only retrieve bearer information if the bearer object exists and the interface is up.
+++     * interface is up only when modem is connected.
+++     * This prevents retrieving information when the modem is disconnected. */
+++    if(cell_iface->bearer_object && (strcmp(cell_iface->status, "Up") == 0)) {
++         SAH_TRACEZ_INFO(ME, "get data for %s", cell_iface->bearer.name);
++ 
++         /* Check bearer config is supported */
++@@ -1577,6 +1583,7 @@ int libmm_bearer_retrieve(UNUSED const char* function_name,
++         if(netdev_name == NULL) {
++             SAH_TRACEZ_ERROR(ME, "mm_bearer_get_interface returned null");
++         } else {
+++            /*store netdev_name internally for returning to caller via Name parameter*/
++             strncpy(cell_iface->netdev_name, netdev_name, sizeof(cell_iface->netdev_name));
++         }
++     }
++@@ -1599,6 +1606,8 @@ int libmm_bearer_retrieve(UNUSED const char* function_name,
++     amxc_var_add_key(cstring_t, ipv6_addr, "NextHop", cell_iface->bearer.ipv6.gateway);
++     amxc_var_add_key(cstring_t, ipv6_addr, "Prefix", cell_iface->bearer.ipv6.prefix);
++     amxc_var_add_key(uint32_t, ipv6_addr, "MTU", cell_iface->bearer.ipv6.mtu);
+++
+++    /* return the network device name associated with the bearer as part of the bearer information.*/
++     amxc_var_add_key(cstring_t, ret, "Name", cell_iface->netdev_name);
++ 
++     retval = 0;
++@@ -1637,7 +1646,8 @@ libmm_modem_reconnect(MMModem* modem) {
++ 
++     /* Attempt to reconnect the modem */
++     run_result = mm_modem_run_sync(modem, cell_iface, TRUE);
++-    strcpy(cell_iface->status, run_result ? "Up" : "Error");
+++    if(!run_result)
+++        g_strlcpy(cell_iface->status, "Error", sizeof(cell_iface->status));
++ 
++     /* Instruct cellular manager to update Cellular.Interface object state */
++     libmm_dm_read_interface_last_change(cell_iface);
++@@ -1681,12 +1691,18 @@ libmm_modem_state_changed (MMModem* modem,
++                     mm_modem_state_get_string(new_state),
++                     libmm_get_state_reason_string(reason));
++ 
+++    cell_iface = find_libmm_cell_iface_by_name(modem_path);
+++    when_null(cell_iface, exit);
+++
+++    if(mm_modem_get_state(modem) == MM_MODEM_STATE_CONNECTED)
+++            g_strlcpy(cell_iface->status, "Up", sizeof(cell_iface->status));
+++    else
+++            g_strlcpy(cell_iface->status, "Down", sizeof(cell_iface->status));
+++
++     /* Handle only the disconnecting events */
++     when_true((old_state != MM_MODEM_STATE_CONNECTING && old_state != MM_MODEM_STATE_CONNECTED) ||
++               (new_state != MM_MODEM_STATE_DISCONNECTING && new_state != MM_MODEM_STATE_ENABLED), exit);
++ 
++-    cell_iface = find_libmm_cell_iface_by_name(modem_path);
++-    when_null(cell_iface, exit);
++ 
++     strncpy(cell_iface->netdev_name, DEFAULT_CELLULAR_INTERFACE, sizeof(cell_iface->netdev_name));
++     SAH_TRACEZ_NOTICE(ME, "netdev_name reset to %s", DEFAULT_CELLULAR_INTERFACE);
++@@ -1826,7 +1842,8 @@ libmm_modem_added (UNUSED MMManager* manager,
++     /* Reconnect modem if it is enabled */
++     if(cell_iface->enable) {
++         gboolean run_result = mm_modem_run_sync(modem, cell_iface, TRUE);
++-        strcpy(cell_iface->status, run_result ? "Up" : "Error");
+++        if(!run_result)
+++            g_strlcpy(cell_iface->status, "Error", sizeof(cell_iface->status));
++         SAH_TRACEZ_NOTICE(ME, "Modem %s reconnected, status is %s", cell_iface->name, cell_iface->status);
++     } else {
++         strcpy(cell_iface->status, "Down");
+-- 
+2.17.1
+

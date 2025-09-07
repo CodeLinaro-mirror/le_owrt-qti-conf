@@ -1,0 +1,208 @@
+From 5c99eec325aa3d239487ca6ead9aa56a8e50b9c9 Mon Sep 17 00:00:00 2001
+From: Mohammed Sinan M <msinan@qti.qualcomm.com>
+Date: Tue, 26 Aug 2025 15:21:50 +0530
+Subject: [PATCH] ipv6 prefix sharing commit
+Signed-off-by: Mohammed Sinan M <msinan@qti.qualcomm.com>
+
+---
+ ...1-ipv6-prefix-sharing-commit-in-dhcp.patch | 188 ++++++++++++++++++
+ 1 file changed, 188 insertions(+)
+ create mode 100644 net_core/plugins/tr181-dhcpv6client/patches/0001-ipv6-prefix-sharing-commit-in-dhcp.patch
+
+diff --git a/net_core/plugins/tr181-dhcpv6client/patches/0001-ipv6-prefix-sharing-commit-in-dhcp.patch b/net_core/plugins/tr181-dhcpv6client/patches/0001-ipv6-prefix-sharing-commit-in-dhcp.patch
+new file mode 100644
+index 0000000..78e1627
+--- /dev/null
++++ b/net_core/plugins/tr181-dhcpv6client/patches/0001-ipv6-prefix-sharing-commit-in-dhcp.patch
+@@ -0,0 +1,188 @@
++This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear 
++From 8c372ae32080473c4223975918e1958874976872 Mon Sep 17 00:00:00 2001
++From: Mohammed Sinan M <msinan@qti.qualcomm.com>
++Date: Tue, 5 Aug 2025 18:19:01 +0530
++Subject: [PATCH] ipv6 prefix sharing commit in dhcp
++Signed-off-by: Mohammed Sinan M <msinan@qti.qualcomm.com>
++
++---
++ include_priv/dm_dhcpv6client.h |   4 ++
++ src/dm_dhcpv6c_event.c         | 122 ++++++++++++++++++++++++++++++++-
++ 2 files changed, 124 insertions(+), 2 deletions(-)
++
++diff --git a/include_priv/dm_dhcpv6client.h b/include_priv/dm_dhcpv6client.h
++index bd839c6..56cd391 100644
++--- a/include_priv/dm_dhcpv6client.h
+++++ b/include_priv/dm_dhcpv6client.h
++@@ -71,11 +71,15 @@ extern "C"
++ #include "dhcpv6client.h"
++ #include "client_info.h"
++ 
+++#define WAN_PATH "NetModel.Intf.wan"
+++#define LAN_PATH "NetModel.Intf.lan"
+++
++ // utility functions
++ //
++ void dm_dhcpv6c_start_stop_client(client_info_t* info);
++ int dm_dhcpv6c_renew_client(client_info_t* info);
++ int dm_dhcpv6c_release_client(client_info_t* info);
+++void update_lan_parent_prefix(int prefix);
++ 
++ // Action handlers
++ amxd_status_t _dhcpv6c_check_is_empty_or_in(amxd_object_t* object,
++diff --git a/src/dm_dhcpv6c_event.c b/src/dm_dhcpv6c_event.c
++index 4210cd6..d7beac7 100644
++--- a/src/dm_dhcpv6c_event.c
+++++ b/src/dm_dhcpv6c_event.c
++@@ -90,13 +90,127 @@ void _dhcpv6c_interface_changed(UNUSED const char* const event_name,
++ exit:
++     return;
++ }
++-
+++/*During SLAAC this function handles the ipv6 prefix of the the LAN client
+++Prefix = 0, prefix sharing
+++Prefix = 1, prefix delegation*/
+++void update_lan_parent_prefix(int prefix) {
+++    SAH_TRACEZ_IN(ME);
+++    amxb_bus_ctx_t* ctx = NULL;
+++    amxc_var_t* wan_intf_var = NULL;
+++    amxc_var_t* lan_intf_var = NULL;
+++    amxc_var_t wan_result;
+++    amxc_var_t lan_result;
+++    amxc_var_t params;
+++    amxc_var_t set_result;
+++    amxc_string_t wan_prefix_path;
+++    amxc_string_t lan_prefix_path;
+++    char* wan_intf_path = NULL;
+++    char* lan_intf_path = NULL;
+++    const char* wan_prefix_instance = NULL;
+++    const char* lan_prefix_instance = NULL;
+++    int rv=0;
+++    // Initialize variables
+++    amxc_string_init(&wan_prefix_path, 0);
+++    amxc_string_init(&lan_prefix_path, 0);
+++    amxc_var_init(&wan_result);
+++    amxc_var_init(&lan_result);
+++    amxc_var_init(&params);
+++    amxc_var_init(&set_result);
+++    // Get bus context
+++    ctx = amxb_be_who_has("Device.IP.");
+++    if (!ctx) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to get IP bus context");
+++        goto exit;
+++    }
+++    // Get WAN interface path using netmodel
+++    wan_intf_var = netmodel_getFirstParameter(WAN_PATH, "InterfacePath", "ip", netmodel_traverse_one_level_down);
+++    if (wan_intf_var == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Could not find WAN interface path");
+++        goto exit;
+++    }
+++    wan_intf_path = amxc_var_dyncast(cstring_t, wan_intf_var);
+++    if (wan_intf_path == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to convert WAN interface path to string");
+++        goto exit;
+++    }
+++    // Get LAN interface path using netmodel
+++    lan_intf_var = netmodel_getFirstParameter(LAN_PATH, "InterfacePath", "ip", netmodel_traverse_one_level_down);
+++    if (lan_intf_var == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Could not find LAN interface path");
+++        goto exit;
+++    }
+++    lan_intf_path = amxc_var_dyncast(cstring_t, lan_intf_var);
+++    if (lan_intf_path == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to convert LAN interface path to string");
+++        goto exit;
+++    }
+++    // Construct WAN prefix path based on prefix type
+++    if (prefix == 0) {
+++        amxc_string_setf(&wan_prefix_path, "%sIPv6Prefix.[Origin == 'RouterAdvertisement'].", wan_intf_path);
+++    } else {
+++        amxc_string_setf(&wan_prefix_path, "%sIPv6Prefix.[Origin == 'PrefixDelegation'].", wan_intf_path);
+++    }
+++    // Get WAN prefix instance
+++    rv = amxb_get(ctx, amxc_string_get(&wan_prefix_path, 0), 0, &wan_result, 5);
+++    if (rv != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to query WAN IPv6Prefix: %d", rv);
+++        goto exit;
+++    }
+++    wan_prefix_instance = amxc_var_key(GETP_ARG(&wan_result, "0.0"));
+++    if (!wan_prefix_instance || *wan_prefix_instance == '\0') {
+++        SAH_TRACEZ_ERROR(ME, "No WAN IPv6Prefix found with specified origin");
+++        goto exit;
+++    }
+++    SAH_TRACEZ_INFO(ME, "Found WAN IPv6Prefix: %s", wan_prefix_instance);
+++    // Construct LAN prefix path with GUA alias
+++    amxc_string_setf(&lan_prefix_path, "%sIPv6Prefix.[Alias == 'GUA'].", lan_intf_path);
+++    // Get LAN prefix instance
+++    rv = amxb_get(ctx, amxc_string_get(&lan_prefix_path, 0), 0, &lan_result, 5);
+++    if (rv != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to query LAN IPv6Prefix: %d", rv);
+++        goto exit;
+++    }
+++    lan_prefix_instance = amxc_var_key(GETP_ARG(&lan_result, "0.0"));
+++    if (!lan_prefix_instance || *lan_prefix_instance == '\0') {
+++        SAH_TRACEZ_ERROR(ME, "No LAN IPv6Prefix found with GUA alias");
+++        goto exit;
+++    }
+++    SAH_TRACEZ_INFO(ME, "Found LAN IPv6Prefix: %s", lan_prefix_instance);
+++    // Set ParentPrefix parameter
+++    amxc_var_set_type(&params, AMXC_VAR_ID_HTABLE);
+++    amxc_var_add_key(cstring_t, &params, "ParentPrefix", wan_prefix_instance);
+++    rv = amxb_set(ctx, lan_prefix_instance, &params, &set_result, 5);
+++    if (rv != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to set ParentPrefix for %s to %s: %d",
+++                         lan_prefix_instance, wan_prefix_instance, rv);
+++    } else {
+++        SAH_TRACEZ_INFO(ME, "Successfully set ParentPrefix for %s to %s",
+++                           lan_prefix_instance, wan_prefix_instance);
+++    }
+++exit:
+++    if (wan_intf_var != NULL) {
+++        amxc_var_clean(wan_intf_var);
+++        free(wan_intf_var);
+++    }
+++    if (lan_intf_var != NULL) {
+++        amxc_var_clean(lan_intf_var);
+++        free(lan_intf_var);
+++    }
+++    amxc_string_clean(&wan_prefix_path);
+++    amxc_string_clean(&lan_prefix_path);
+++    amxc_var_clean(&wan_result);
+++    amxc_var_clean(&lan_result);
+++    amxc_var_clean(&params);
+++    amxc_var_clean(&set_result);
+++    SAH_TRACEZ_OUT(ME);
+++}
++ void _dhcpv6c_object_changed(UNUSED const char* const event_name,
++                              const amxc_var_t* const event_data,
++                              UNUSED void* const priv) {
++     amxd_object_t* client = amxd_dm_signal_get_object(dhcpv6c_get_dm(), event_data);
++     client_info_t* info = NULL;
++     amxc_var_t* enable_has_changed = GETP_ARG(event_data, "parameters.Enable");
+++    amxc_var_t* requestprefix_has_changed = GETP_ARG(event_data, "parameters.RequestPrefixes");
++ 
++     when_null_trace(client, exit, ERROR, "No client object found when change detected");
++     SAH_TRACEZ_INFO(ME, "<%s> changed", amxd_object_get_name(client, AMXD_OBJECT_NAMED));
++@@ -107,6 +221,10 @@ void _dhcpv6c_object_changed(UNUSED const char* const event_name,
++     info->flags.bit.enable = amxd_object_get_value(bool, client, "Enable", NULL);
++     info->flags.bit.req_addr = amxd_object_get_value(bool, client, "RequestAddresses", NULL);
++     info->flags.bit.req_pref = amxd_object_get_value(bool, client, "RequestPrefixes", NULL);
+++    if(requestprefix_has_changed != NULL) {
+++        SAH_TRACEZ_WARNING(ME, "RequestPrefixes has changed");
+++        update_lan_parent_prefix(info->flags.bit.req_pref ? 1 : 0);
+++    }
++ 
++     if(enable_has_changed != NULL) {
++         dm_client_init(client);
++@@ -291,4 +409,4 @@ void _dhcpv6c_sent_option_changed(UNUSED const char* const event_name,
++ exit:
++     free(status);
++     return;
++-}
++\ No newline at end of file
+++}
++-- 
++2.34.1
++
+-- 
+2.34.1
+

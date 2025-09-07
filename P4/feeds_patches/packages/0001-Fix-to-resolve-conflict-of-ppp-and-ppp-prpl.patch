@@ -1,0 +1,25 @@
+From 54001c701e8384fdc0324eeb25fceb165ba58c2d Mon Sep 17 00:00:00 2001
+From: Bijeesh B <bijeb@qti.qualcomm.com>
+Date: Mon, 14 Jul 2025 10:16:13 +0530
+Subject: [PATCH] Fix to resolve conflict of ppp and ppp-prpl
+
+Signed-off-by: Bijeesh B <bijeb@qti.qualcomm.com>
+---
+ net/modemmanager/Makefile | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/net/modemmanager/Makefile b/net/modemmanager/Makefile
+index 5017d3e..5d978d7 100644
+--- a/net/modemmanager/Makefile
++++ b/net/modemmanager/Makefile
+@@ -41,7 +41,6 @@ define Package/modemmanager
+ 	$(INTL_DEPENDS) \
+ 	+glib2 \
+ 	+dbus \
+-	+ppp \
+ 	+MODEMMANAGER_WITH_MBIM:libmbim \
+ 	+MODEMMANAGER_WITH_QMI:libqmi \
+ 	+MODEMMANAGER_WITH_QRTR:libqrtr-glib
+-- 
+2.34.1
+
