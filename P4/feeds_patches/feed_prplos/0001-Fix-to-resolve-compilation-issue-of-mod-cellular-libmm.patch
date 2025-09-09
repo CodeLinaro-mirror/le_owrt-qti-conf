@@ -1,0 +1,50 @@
+From fdfb478862af966a6af647cedab243787446e4fc Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Tue, 26 Aug 2025 14:39:22 +0530
+Subject: [PATCH] Fix to resolve compilation issue of mod-cellular-libmm module
+
+---
+ ...ompilation-issue-of-mod-cellular-lib.patch | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0001-Fix-to-resolve-compilation-issue-of-mod-cellular-lib.patch
+
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0001-Fix-to-resolve-compilation-issue-of-mod-cellular-lib.patch b/net_core/mods/mod-cellular-libmm/patches/0001-Fix-to-resolve-compilation-issue-of-mod-cellular-lib.patch
+new file mode 100644
+index 0000000..592670d
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0001-Fix-to-resolve-compilation-issue-of-mod-cellular-lib.patch
+@@ -0,0 +1,31 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 303edfce040fdaabb5ca89a1338c6dbc3cb3e44d Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Fri, 22 Aug 2025 14:19:47 +0530
++Subject: [PATCH] Fix to resolve compilation issue of mod-cellular-libmm module
++
++---
++ src/mod_cellular-libmm.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index a51ab61..59ad1ea 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -607,7 +607,7 @@ libmm_fetch_bearer_info_sync_ipcfg(MMBearerIpConfig* ip_config, libmm_cell_beare
++             pref_or_mask = ipat_text_mask_apply_direct(cell_bearer_ipcfg->addr, prefixlen, ipat_bits_upper, ipat_oper_and, false);
++             snprintf(prefixlen_str, sizeof(prefixlen_str) - 1, "%hhu", (unsigned char) prefixlen);
++             pref_or_mask = realloc(pref_or_mask, strlen(pref_or_mask) + strlen(prefixlen_str) + 2);
++-            strncat(pref_or_mask, "/", 1);
+++            strlcat(pref_or_mask, "/", strlen(pref_or_mask) + strlen(prefixlen_str) + 2);
++             strncat(pref_or_mask, prefixlen_str, strlen(prefixlen_str));
++             break;
++         default:
++-- 
++2.34.1
++
+-- 
+2.34.1
+
