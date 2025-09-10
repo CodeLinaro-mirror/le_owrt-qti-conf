@@ -1,0 +1,946 @@
+From 651f25cb9a4cbbb3d4fc97d918ea21c5160401e9 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Thu, 28 Aug 2025 13:03:29 +0530
+Subject: [PATCH] autoconnect-connect-backhaul-profile-id
+
+---
+ ...-connect-backhaul-and-get-profile-id.patch | 288 ++++++++
+ ...ect-default-profile-connect-backhaul.patch | 631 ++++++++++++++++++
+ 2 files changed, 919 insertions(+)
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0004-connect-backhaul-and-get-profile-id.patch
+ create mode 100644 net_core/plugins/cellular-manager/patches/0002-autoconnect-default-profile-connect-backhaul.patch
+
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0004-connect-backhaul-and-get-profile-id.patch b/net_core/mods/mod-cellular-libmm/patches/0004-connect-backhaul-and-get-profile-id.patch
+new file mode 100644
+index 0000000..deae5c3
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0004-connect-backhaul-and-get-profile-id.patch
+@@ -0,0 +1,288 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 48c8fe8cdf25dffc272590c664b0c8ee6d4e5ec3 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Thu, 28 Aug 2025 12:54:17 +0530
++Subject: [PATCH] Profile ID and ConnectBackHaul
++
++---
++ include_priv/mod_cellular-libmm.h |   5 +
++ src/mod_cellular-libmm.c          | 244 +++++++++++++++++++++++++++++-
++ 2 files changed, 246 insertions(+), 3 deletions(-)
++
++diff --git a/include_priv/mod_cellular-libmm.h b/include_priv/mod_cellular-libmm.h
++index 117e60f..9702233 100644
++--- a/include_priv/mod_cellular-libmm.h
+++++ b/include_priv/mod_cellular-libmm.h
++@@ -150,0 +151 @@ typedef struct _cell_libmm_iface {
+++    bool auto_connect;
++@@ -188,0 +190,4 @@ int libmm_bearer_retrieve(const char* function_name,
+++int libmm_iface_get_profile_id(UNUSED const char* function_name,
+++                           amxc_var_t* args,
+++                           amxc_var_t* ret);
+++
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index 75c34db..07c63f4 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -97,0 +98,2 @@ static void reset_libmm_cell_bearer(libmm_cell_bearer_t* bearer);
+++static gint get_profile_id_matching_apn(MMObject *modem_object, const char *apn, GError **error);
+++
++@@ -1297,0 +1300,4 @@ int libmm_iface_set(UNUSED const char* function_name,
+++    gint profile_id = -1;
+++    bool connect_backhaul = false;
+++    bool auto_connect = false;
+++    const char* apn = NULL;
++@@ -1304,0 +1311 @@ int libmm_iface_set(UNUSED const char* function_name,
+++    apn = GET_CHAR(args, "APN");
++@@ -1316,0 +1324,23 @@ int libmm_iface_set(UNUSED const char* function_name,
+++    // Get profile_id from args
+++    if (GET_ARG(args, "ProfileID")) {
+++        profile_id = GET_INT32(args, "ProfileID");
+++        //To retrieve profile ID if not retrieved early.
+++        if (profile_id <= 0) {
+++            profile_id = get_profile_id_matching_apn(cell_iface->modem_object, apn, &error);
+++        }
+++        SAH_TRACEZ_INFO(ME, "Using provided Profile ID: %d", profile_id);
+++    }
+++
+++    // Get AutoConnect value from args
+++    if (GET_ARG(args, "AutoConnect")) {
+++        auto_connect = GET_BOOL(args, "AutoConnect");
+++        cell_iface->auto_connect = auto_connect;
+++        SAH_TRACEZ_INFO(ME, "Using provided AutoConnect: %d", auto_connect);
+++    }
+++
+++    /* Get ConnectBackHaul from args, default to false if not present */
+++    if (GET_ARG(args, "ConnectBackHaul")) {
+++        connect_backhaul = GET_BOOL(args, "ConnectBackHaul");
+++        SAH_TRACEZ_INFO(ME, "Using provided ConnectBackHaul: %d", connect_backhaul);
+++    }
+++
++@@ -1321 +1351 @@ int libmm_iface_set(UNUSED const char* function_name,
++-        if(cell_iface->enable && !prev_enable) {
+++        if(cell_iface->enable && connect_backhaul) {
++@@ -1342,0 +1373,7 @@ int libmm_iface_set(UNUSED const char* function_name,
+++                //Initiate call with valid profile ID
+++                if (profile_id <= 0) {
+++                    SAH_TRACEZ_ERROR(ME, "Profile ID is not retrieved, not establising the connection");
+++                    goto exit;
+++                }
+++                mm_bearer_properties_set_profile_id(cell_iface->bearer_properties, profile_id);
+++                SAH_TRACEZ_INFO(ME, "Set Profile ID: %d for interface: %s", profile_id, cell_iface->name);
++@@ -1350,0 +1388,6 @@ int libmm_iface_set(UNUSED const char* function_name,
+++        } else if(cell_iface->enable && !connect_backhaul) {
+++            if(modem) {
+++                SAH_TRACEZ_NOTICE(ME, "Disconnecting interface: %s", cell_iface->name);
+++                run_result = mm_modem_run_sync(modem, cell_iface, FALSE);
+++                strlcpy(cell_iface->status, run_result ? "Down" : "Error", sizeof(cell_iface->status));
+++            }
++@@ -1731,2 +1774,6 @@ libmm_modem_state_changed (MMModem* modem,
++-    when_true((old_state != MM_MODEM_STATE_CONNECTING && old_state != MM_MODEM_STATE_CONNECTED) ||
++-              (new_state != MM_MODEM_STATE_DISCONNECTING && new_state != MM_MODEM_STATE_ENABLED), exit);
+++    /* Exit early if any condition fails: state transition is not from
+++     * DISCONNECT to REGISTERED, auto-connect disabled, or no bearer object */
+++    when_true((old_state != MM_MODEM_STATE_DISCONNECTING) ||
+++          (new_state != MM_MODEM_STATE_REGISTERED) ||
+++          (!cell_iface->auto_connect) ||
+++          (cell_iface->bearer_object == NULL), exit);
++@@ -1915,0 +1963,190 @@ exit:
+++/**
+++* @brief Enable a modem if it is in the disabled state.
+++*
+++* This function checks the modem state and enables it if it is disabled.
+++*
+++* @param[in] modem_object The modem object.
+++* @param[out] error A pointer to a GError to store any error that occurs.
+++*
+++* @return TRUE if the modem is enabled or was already enabled, FALSE otherwise.
+++*/
+++static gboolean libmm_modem_enable(MMObject *modem_object, GError **error) {
+++    MMModem *modem = NULL;
+++    MMModemState modem_state;
+++    const gchar *modem_path;
+++    gboolean result = FALSE;
+++
+++    when_null_trace(modem_object, exit, ERROR, "Modem object is NULL");
+++
+++    modem_path = mm_object_get_path(modem_object);
+++    SAH_TRACEZ_INFO(ME, "Checking modem state for %s", modem_path);
+++
+++    modem = mm_object_get_modem(modem_object);
+++    when_null_trace(modem, exit, ERROR, "Failed to get modem from object %s", modem_path);
+++
+++    modem_state = mm_modem_get_state(modem);
+++    if (modem_state == MM_MODEM_STATE_DISABLED) {
+++        if (!mm_modem_enable_sync(modem, NULL, error)) {
+++            SAH_TRACEZ_ERROR(ME, "Failed to enable modem %s: %s", modem_path, (*error)->message);
+++            goto exit;
+++        }
+++        SAH_TRACEZ_INFO(ME, "Modem %s enabled successfully", modem_path);
+++    }
+++
+++    result = TRUE;
+++
+++exit:
+++    g_clear_object(&modem);
+++    return result;
+++}
+++
+++/**
+++ * @brief Get the profile ID matching a given APN from the modem.
+++ *
+++ * This function searches for a profile with a matching APN in the modem's profile manager.
+++ *
+++ * @param[in] modem_object The modem object.
+++ * @param[in] apn The APN to match.
+++ * @param[in] modem_path The path of the modem.
+++ * @param[out] error A pointer to a GError to store any error that occurs.
+++ *
+++ * @return The profile ID if found, otherwise -1.
+++ */
+++static gint get_matching_profile_from_apn(MMObject *modem_object, const char *apn, const char *modem_path, GError **error)
+++{
+++    GList *profiles = NULL;
+++    GList *l;
+++    gint profile_id = -1;
+++    MMModem3gppProfileManager *profile_manager = NULL;
+++
+++    /* Get profile manager */
+++    profile_manager = mm_object_get_modem_3gpp_profile_manager(modem_object);
+++    when_null_trace(profile_manager, exit, ERROR, "Profile manager not found for modem %s", modem_path);
+++
+++    /* List profiles */
+++    if (!mm_modem_3gpp_profile_manager_list_sync(profile_manager, NULL, &profiles, error)) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to list profiles for modem %s: %s", modem_path, (*error)->message);
+++        goto exit;
+++    }
+++
+++    /* Search for profile with matching APN */
+++    for (l = profiles; l; l = g_list_next(l)) {
+++        MM3gppProfile *profile = MM_3GPP_PROFILE(l->data);
+++        const gchar *profile_apn = mm_3gpp_profile_get_apn(profile);
+++        if (profile_apn && g_str_equal(profile_apn, apn)) {
+++            profile_id = mm_3gpp_profile_get_profile_id(profile);
+++            SAH_TRACEZ_INFO(ME, "Found APN: %s with Profile ID: %d", apn, profile_id);
+++            break;
+++        }
+++    }
+++
+++    if (profile_id == -1) {
+++        SAH_TRACEZ_ERROR(ME, "No profile found with APN %s on modem %s", apn, modem_path);
+++    }
+++
+++exit:
+++    g_list_free_full(profiles, g_object_unref);
+++    g_clear_object(&profile_manager);
+++    return profile_id;
+++}
+++
+++/**
+++ * @brief Get the profile ID matching a given APN for a modem.
+++ *
+++ * This function checks the modem state and searches for a profile with a matching APN.
+++ * If the modem is disabled, it attempts to enable it before searching for the profile.
+++ *
+++ * @param[in] modem_object The modem object.
+++ * @param[in] apn The APN to match.
+++ * @param[out] error A pointer to a GError to store any error that occurs.
+++ *
+++ * @return The profile ID if found, otherwise -1.
+++ */
+++static gint get_profile_id_matching_apn(MMObject *modem_object, const char *apn, GError **error) {
+++    MMModem *modem = NULL;
+++    const gchar *modem_path;
+++    gint profile_id = -1;
+++
+++    when_null_trace(modem_object, exit, ERROR, "Modem object is NULL");
+++    when_null_trace(apn, exit, ERROR, "APN is NULL");
+++
+++    modem_path = mm_object_get_path(modem_object);
+++    SAH_TRACEZ_INFO(ME, "Searching for profile with APN %s on modem %s", apn, modem_path);
+++
+++    /* Get modem */
+++    modem = mm_object_get_modem(modem_object);
+++    when_null_trace(modem, exit, ERROR, "Failed to get modem from object %s", modem_path);
+++
+++    if (!libmm_modem_enable(modem_object, error)) {
+++        goto exit;
+++    }
+++
+++    /* Search for profile with matching APN */
+++    profile_id = get_matching_profile_from_apn(modem_object, apn, modem_path, error);
+++
+++exit:
+++    g_clear_object(&modem);
+++    return profile_id;
+++}
+++
+++/**
+++ * @brief Retrieve the profile ID for a given APN on a cellular interface.
+++ *
+++ * This function retrieves the profile ID for a specified APN on a cellular interface.
+++ * It uses the modem object associated with the interface to search for the profile.
+++ *
+++ * @param[in] function_name The name of the function (unused).
+++ * @param[in] args The arguments passed to the function, containing the object path and APN.
+++ * @param[out] ret The return value of the function, containing the profile ID.
+++ *
+++ * @return 0 on success, -1 on failure.
+++ */
+++int libmm_iface_get_profile_id(UNUSED const char* function_name,
+++                           amxc_var_t* args,
+++                           amxc_var_t* ret) {
+++    int retval = -1;
+++    const char* obj_path = NULL;
+++    const char* apn = NULL;
+++    libmm_cell_iface_t* cell_iface = NULL;
+++    GError* error = NULL;
+++    gint profile_id = -1;
+++
+++    g_mutex_lock(&libmm_lock);
+++
+++    when_null_trace(args, exit, ERROR, "Passed args is NULL");
+++    when_null_trace(ret, exit, ERROR, "Passed ret is NULL");
+++    when_failed_trace((amxc_var_type_of(args) != AMXC_VAR_ID_HTABLE), exit, ERROR,
+++                      "args is not an htable");
+++
+++    obj_path = GET_CHAR(args, "ObjectPath");
+++    when_null_trace(obj_path, exit, ERROR, "Passed object path is NULL");
+++    apn = GET_CHAR(args, "APN");
+++    when_null_trace(apn, exit, ERROR, "Passed APN is NULL");
+++
+++    cell_iface = find_libmm_cell_iface_by_object_path(obj_path);
+++    when_null_trace(cell_iface, exit, ERROR, "libmm cell interface %s not found", obj_path);
+++
+++    SAH_TRACEZ_INFO(ME, "Retrieving profile ID for interface %s with APN %s", obj_path, apn);
+++
+++    if (!cell_iface->modem_object) {
+++        SAH_TRACEZ_ERROR(ME, "No modem object associated with interface %s", obj_path);
+++        goto exit;
+++    }
+++
+++    profile_id = get_profile_id_matching_apn(cell_iface->modem_object, apn, &error);
+++    if (profile_id <= 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find profile ID for APN %s: %s", apn, error ? error->message : "profile not found");
+++        goto exit;
+++    }
+++
+++    amxc_var_set_type(ret, AMXC_VAR_ID_HTABLE);
+++    amxc_var_add_key(int32_t, ret, "ProfileID", profile_id);
+++    retval = 0;
+++    SAH_TRACEZ_INFO(ME, "Profile ID %d retrieved for APN %s", profile_id, apn);
+++
+++exit:
+++    g_clear_error(&error);
+++    g_mutex_unlock(&libmm_lock);
+++    return retval;
+++}
+++
++@@ -1934,0 +2172 @@ static AMXM_CONSTRUCTOR libmm_module_start(void) {
+++    amxm_module_add_function(mod, "get-profile-id", libmm_iface_get_profile_id);
++-- 
++2.34.1
++
+diff --git a/net_core/plugins/cellular-manager/patches/0002-autoconnect-default-profile-connect-backhaul.patch b/net_core/plugins/cellular-manager/patches/0002-autoconnect-default-profile-connect-backhaul.patch
+new file mode 100644
+index 0000000..fd232fe
+--- /dev/null
++++ b/net_core/plugins/cellular-manager/patches/0002-autoconnect-default-profile-connect-backhaul.patch
+@@ -0,0 +1,631 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 45adbf21d67227f553d6ae0b0a89ed291a8e8baf Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Thu, 21 Aug 2025 06:42:55 +0530
++Subject: [PATCH] autoconnect-default-profile-connect-backhaul
++
++---
++ include_priv/cellular_events.h      |   8 +
++ include_priv/cellular_soc_utils.h   |   2 +-
++ odl/cellular-manager_definition.odl |  35 ++++
++ src/cellular_soc_utils.c            |  53 +++++-
++ src/cellular_utils.c                | 140 ++++++++++++++-
++ src/dm_cellular_events.c            | 256 ++++++++++++++++++++++++++++
++ 6 files changed, 490 insertions(+), 4 deletions(-)
++
++diff --git a/include_priv/cellular_events.h b/include_priv/cellular_events.h
++index 1b670fa..9222c09 100644
++--- a/include_priv/cellular_events.h
+++++ b/include_priv/cellular_events.h
++@@ -92,6 +92,14 @@ void _print_event(const char* const sig_name,
++                   const amxc_var_t* const data,
++                   void* const priv);
++ 
+++void _access_point_connect_backhaul_changed(UNUSED const char* const sig_name,
+++                                           const amxc_var_t* const data,
+++                                           UNUSED void* const priv);
+++
+++void _access_point_default_profile_changed(UNUSED const char* const sig_name,
+++                                          const amxc_var_t* const data,
+++                                          UNUSED void* const priv);
+++
++ #ifdef __cplusplus
++ }
++ #endif
++diff --git a/include_priv/cellular_soc_utils.h b/include_priv/cellular_soc_utils.h
++index 569f868..9cdacd0 100644
++--- a/include_priv/cellular_soc_utils.h
+++++ b/include_priv/cellular_soc_utils.h
++@@ -72,7 +72,7 @@ int mod_cellular_execute_function(amxd_object_t* cellular_obj, const char* funct
++ 
++ int mod_cellular_set_interface_params(amxd_object_t* cellular_obj);
++ 
++-int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable);
+++int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable, bool connect_backhaul, amxd_object_t* ap_obj);
++ int set_cell_iface_usim(cell_iface_t* cell_iface, const char* pincheck, const char* pin);
++ 
++ void cell_iface_fill_trans(cell_iface_t* cell_iface, amxd_trans_t* trans);
++diff --git a/odl/cellular-manager_definition.odl b/odl/cellular-manager_definition.odl
++index 5b32472..b33ae58 100644
++--- a/odl/cellular-manager_definition.odl
+++++ b/odl/cellular-manager_definition.odl
++@@ -26,6 +26,15 @@
++             on action validate call check_is_empty_or_in "Cellular.SupportedControllers";
++         }
++ 
+++        /**
+++         * Enables or disables automatic connection on bootup.
+++         * If TRUE, the connection cannot be brought down manually.
+++         * Default is FALSE.
+++         *
+++         * @version V1.1
+++         */
+++        %persistent bool X_QCOM_AutoConnect = false;
+++
++         /**
++          * Enables or disables the roaming.
++          *
++@@ -582,6 +591,28 @@
++             %persistent uint32 ProxyPort {
++                 on action validate call check_range [0, 65535];
++             }
+++	     /**
+++	     * Controls the connection state of this Access Point.
+++	     * If TRUE, establishes the connection; if FALSE, disconnects it.
+++	     * Not exposed to TR-069 (internal use only). Not a persistent value.
+++	     *
+++	     * @version V1.1
+++	     */
+++	    bool X_QCOM_ConnectBackHaul = false;
+++	    /**
+++	     * Indicates if this Access Point is the default profile for automatic connection.
+++	     * Only one instance can be TRUE at a time.
+++	     *
+++	     * @version V1.1
+++	     */
+++	    %persistent bool X_QCOM_DefaultProfile = false;
+++	    /**
+++	     * Read-only identifier of the profile used for the connection.
+++	     * Maps to the profile ID maintained in MM for the corresponding APN.
+++	     *
+++	     * @version V1.1
+++	     */
+++	    %read-only uint32 X_QCOM_ProfileId;
++ 
++             /**
++              * The value MUST be the Path Name of a row in the Interface table.
++@@ -621,6 +652,10 @@
++         filter 'path == "Cellular.AccessPoint."';
++     on event "dm:object-changed" call cell_ap_enable_changed
++         filter 'path matches "Cellular\.AccessPoint\.[0-9]+\.$" && contains("parameters.Enable")';
+++    on event "dm:object-changed" call access_point_connect_backhaul_changed
+++        filter 'path matches "Cellular\.AccessPoint\.[0-9]+\.$" && contains("parameters.X_QCOM_ConnectBackHaul")';
+++    on event "dm:object-changed" call access_point_default_profile_changed
+++        filter 'path matches "Cellular\.AccessPoint\.[0-9]+\.$" && contains("parameters.X_QCOM_DefaultProfile")';
++     // uncomment for debugging (only logs to syslog)
++     // on event "*" call print_event
++     //    filter 'path matches "Cellular\..*"';
++diff --git a/src/cellular_soc_utils.c b/src/cellular_soc_utils.c
++index c66a2cb..b87cb70 100644
++--- a/src/cellular_soc_utils.c
+++++ b/src/cellular_soc_utils.c
++@@ -306,10 +306,14 @@ exit:
++     return rv;
++ }
++ 
++-int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable) {
+++int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable, bool connect_backhaul, amxd_object_t* ap_obj) {
++     int rv = -1;
++     amxc_var_t data;
++     amxc_var_t ret;
+++    int32_t profile_id = -1;
+++
+++    SAH_TRACEZ_INFO(ME, "Entering set_cell_iface_enabled, enable=%d, connect_backhaul=%d",
+++                    enable, connect_backhaul);
++ 
++     when_failed_trace(amxc_var_init(&ret), exit, ERROR, "Failed to init ret");
++     when_failed_trace(amxc_var_init(&data), exit, ERROR, "Failed to init data");
++@@ -322,13 +326,15 @@ int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable) {
++     amxc_var_set_type(&data, AMXC_VAR_ID_HTABLE);
++     amxc_var_add_key(cstring_t, &data, "ObjectPath", amxd_object_get_path(cell_iface->object, AMXD_OBJECT_INDEXED));
++     amxc_var_add_key(bool, &data, "Enable", enable);
+++    amxc_var_add_key(bool, &data, "ConnectBackHaul", connect_backhaul);
++ 
++     amxd_dm_t* dm = cellular_get_dm();
+++    when_null_trace(dm, exit, ERROR, "Failed to get data model");
++     amxd_object_t* cell_obj = amxd_dm_findf(dm, "Cellular");
++     when_null_trace(cell_obj, exit, ERROR, "Cellular not found");
++     const amxc_var_t* roaming = amxd_object_get_param_value(cell_obj, "RoamingEnabled");
++-    amxd_object_t* ap_obj = find_accesspoint_obj(amxd_object_get_index(cell_iface->object));
++     when_null_trace(ap_obj, exit, ERROR, "AccessPoint not found");
+++    const amxc_var_t* auto_connect = amxd_object_get_param_value(cell_obj, "X_QCOM_AutoConnect");
++     const amxc_var_t* apn = amxd_object_get_param_value(ap_obj, "APN");
++     const amxc_var_t* user = amxd_object_get_param_value(ap_obj, "Username");
++     const amxc_var_t* pass = amxd_object_get_param_value(ap_obj, "Password");
++@@ -344,12 +350,55 @@ int set_cell_iface_enabled(cell_iface_t* cell_iface, bool enable) {
++ 
++     amxc_var_add_key(cstring_t, &data, "APN", amxc_var_constcast(cstring_t, apn));
++     amxc_var_add_key(bool, &data, "RoamingEnabled", amxc_var_dyncast(bool, roaming));
+++    amxc_var_add_key(bool, &data, "AutoConnect", amxc_var_dyncast(bool, auto_connect));
++     amxc_var_add_key(cstring_t, &data, "UserName", amxc_var_constcast(cstring_t, user));
++     amxc_var_add_key(cstring_t, &data, "Password", amxc_var_constcast(cstring_t, pass));
++     amxc_var_add_key(cstring_t, &data, "Proxy", amxc_var_constcast(cstring_t, proxy));
++     amxc_var_add_key(uint32_t, &data, "ProxyPort", amxc_var_dyncast(uint32_t, port));
++     amxc_var_add_key(cstring_t, &data, "IPType", amxc_var_constcast(cstring_t, iptype));
++ 
+++    // Retrieve ProfileID if the interface is enabled
+++    if (!enable) {
+++        SAH_TRACEZ_WARNING(ME, "Interface is not Enabled, so not retrieving the Profile ID");
+++        goto set_cell_iface_info;
+++    }
+++
+++    amxc_var_t profile_data;
+++    when_failed_trace(amxc_var_init(&profile_data), exit, ERROR, "Failed to init profile_data");
+++    amxc_var_set_type(&profile_data, AMXC_VAR_ID_HTABLE);
+++    amxc_var_add_key(cstring_t, &profile_data, "ObjectPath", amxd_object_get_path(cell_iface->object, AMXD_OBJECT_INDEXED));
+++    amxc_var_add_key(cstring_t, &profile_data, "APN", amxc_var_constcast(cstring_t, apn));
+++
+++    rv = mod_cellular_execute_function(cell_iface->object, "get-profile-id", &profile_data, &ret);
+++    if (rv != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to retrieve Profile ID, rv=%d", rv);
+++        amxc_var_clean(&profile_data);
+++        amxc_var_clean(&ret);
+++        goto set_cell_iface_info;
+++    }
+++
+++    profile_id = GET_INT32(&ret, "ProfileID");
+++    SAH_TRACEZ_INFO(ME, "Retrieved Profile ID: %d", profile_id);
+++    amxc_var_add_key(int32_t, &data, "ProfileID", profile_id);
+++
+++    // Update X_QCOM_ProfileId in the Data Model
+++    amxd_trans_t trans;
+++    amxd_trans_init(&trans);
+++
+++    // Allow updating read-only parameter
+++    amxd_trans_set_attr(&trans, amxd_tattr_change_ro, true);
+++    amxd_trans_select_object(&trans, ap_obj);
+++    amxd_trans_set_value(int32_t, &trans, "X_QCOM_ProfileId", profile_id);
+++    rv = amxd_trans_apply(&trans, dm);
+++    amxd_trans_clean(&trans);
+++
+++    if (rv != amxd_status_ok) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to update X_QCOM_ProfileId to %d in DM", profile_id);
+++    }
+++    amxc_var_clean(&profile_data);
+++    amxc_var_clean(&ret);
+++
+++set_cell_iface_info:
++     when_failed_trace(mod_cellular_execute_function(cell_iface->object, "set-cell-iface-info", &data, &ret),
++                       exit, ERROR, "set-cell-iface-info failed");
++ 
++diff --git a/src/cellular_utils.c b/src/cellular_utils.c
++index a307c64..b163edd 100644
++--- a/src/cellular_utils.c
+++++ b/src/cellular_utils.c
++@@ -369,6 +369,132 @@ exit:
++     return rv;
++ }
++ 
+++/**
+++ * @brief Get the default AccessPoint.
+++ *
+++ * This function searches for the AccessPoint with the X_QCOM_DefaultProfile set to true.
+++ *
+++ * @return A pointer to the default AccessPoint object if found, otherwise NULL.
+++ */
+++static amxd_object_t* get_default_accesspoint(void) {
+++    amxd_dm_t* dm = cellular_get_dm();
+++    amxd_object_t* ap_parent = NULL;
+++    amxd_object_t* default_ap = NULL;
+++    amxd_trans_t trans;
+++
+++    amxd_trans_init(&trans);
+++    ap_parent = amxd_dm_findf(dm, "Cellular.AccessPoint");
+++    when_null_trace(ap_parent, exit, ERROR, "Could not find Cellular.AccessPoint");
+++
+++    // Iterate through AccessPoint instances
+++    amxc_llist_for_each(it, (&ap_parent->instances)) {
+++        amxd_object_t* ap = amxc_llist_it_get_data(it, amxd_object_t, it);
+++        if (amxd_object_get_bool(ap, "X_QCOM_DefaultProfile", NULL)) {
+++            default_ap = ap;
+++            SAH_TRACEZ_INFO(ME, "Found default AP: %s",
+++                            amxd_object_get_path(default_ap, AMXD_OBJECT_INDEXED));
+++            break;
+++        }
+++    }
+++
+++    if (default_ap == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "No AccessPoint with X_QCOM_DefaultProfile=true found");
+++    }
+++
+++exit:
+++    amxd_trans_clean(&trans);
+++    return default_ap;
+++}
+++
+++/**
+++ * @brief Set the default AccessPoint.
+++ *
+++ * This function sets the default AccessPoint to Cellular.AccessPoint.1
+++ * if no default AccessPoint is already set.
+++ *
+++ * @return A pointer to the default AccessPoint object.
+++ */
+++static amxd_object_t* set_default_accesspoint(void) {
+++    amxd_object_t* default_ap = NULL;
+++    amxd_dm_t* dm = cellular_get_dm();
+++    amxd_object_t* ap_obj = NULL;
+++
+++    // Check if a default AccessPoint already exists
+++    default_ap = get_default_accesspoint();
+++    if (default_ap != NULL) {
+++        SAH_TRACEZ_INFO(ME, "Default AccessPoint already exists: %s",
+++                        amxd_object_get_path(default_ap, AMXD_OBJECT_INDEXED));
+++        return default_ap;
+++    }
+++
+++    // No default profile found, set Cellular.AccessPoint.1 as default
+++    ap_obj = amxd_dm_findf(dm, "Cellular.AccessPoint.1.");
+++    when_null_trace(ap_obj, exit, ERROR, "No AccessPoint profiles exist at Cellular.AccessPoint.1");
+++
+++    amxd_status_t status = amxd_object_set_value(bool, ap_obj, "X_QCOM_DefaultProfile", true);
+++    if (status != amxd_status_ok) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to set default AccessPoint: %d", status);
+++        goto exit;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "Set Cellular.AccessPoint.1 as default AccessPoint");
+++    default_ap = ap_obj;
+++
+++exit:
+++    return default_ap;
+++}
+++
+++/**
+++ * @brief Update the ConnectBackHaul flags for the default AccessPoint.
+++ *
+++ * This function updates the X_QCOM_ConnectBackHaul flag for the
+++ * default AccessPoint based on the X_QCOM_AutoConnect value.
+++ *
+++ * @param[in,out] connect_backhaul A pointer to a boolean indicating the ConnectBackHaul value.
+++ * @param[in] ap_obj The AccessPoint object to update.
+++ *
+++ * @return The status of the operation.
+++ */
+++static amxd_status_t update_connect_backhaul_flags(bool* connect_backhaul, amxd_object_t* ap_obj) {
+++    amxd_status_t status = amxd_status_unknown_error;
+++    amxd_dm_t* dm = cellular_get_dm();
+++    when_null_trace(dm, exit, ERROR, "Failed to get data model");
+++    amxd_object_t* default_ap = ap_obj;
+++    bool auto_connect_value = false;
+++
+++    when_null_trace(connect_backhaul, exit, ERROR, "connect_backhaul pointer is NULL");
+++    *connect_backhaul = false;
+++
+++    if (default_ap == NULL) {
+++        SAH_TRACEZ_INFO(ME, "No default AccessPoint found, no ConnectBackHaul update needed");
+++        status = amxd_status_ok;
+++        goto exit;
+++    }
+++
+++    amxd_object_t* cell_obj = amxd_dm_findf(dm, "Cellular");
+++    when_null_trace(cell_obj, exit, ERROR, "Cellular not found");
+++    const amxc_var_t* auto_connect = amxd_object_get_param_value(cell_obj, "X_QCOM_AutoConnect");
+++    auto_connect_value = amxc_var_dyncast(bool, auto_connect);
+++    SAH_TRACEZ_INFO(ME, "X_QCOM_AutoConnect value = %d", auto_connect_value);
+++
+++    // Set X_QCOM_ConnectBackHaul = X_QCOM_AutoConnect for the default AccessPoint
+++    status = amxd_object_set_value(bool, default_ap, "X_QCOM_ConnectBackHaul", auto_connect_value);
+++    if (status != amxd_status_ok) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to set X_QCOM_ConnectBackHaul for default AP: %d", status);
+++        goto exit;
+++    }
+++
+++    // Update output parameter
+++    *connect_backhaul = auto_connect_value;
+++    SAH_TRACEZ_INFO(ME, "X_QCOM_ConnectBackHaul value = %d", *connect_backhaul);
+++    SAH_TRACEZ_INFO(ME, "Set X_QCOM_ConnectBackHaul = %s for default AP: %s",
+++                    auto_connect_value ? "true" : "false",
+++                    amxd_object_get_path(default_ap, AMXD_OBJECT_INDEXED));
+++
+++exit:
+++    return status;
+++}
+++
++ /**
++  * @brief Enable or disable a cellular interface
++  * @param cell_iface pointer to the cell_iface structure
++@@ -379,8 +505,20 @@ exit:
++ int cell_iface_set_enabled(cell_iface_t* cell_iface, bool enable) {
++     int ret = -1;
++     when_null_trace(cell_iface, exit, ERROR, "interface can not be null, invalid argument");
+++    bool connect_backhaul = false;
+++    amxd_object_t* ap_obj = NULL;
+++
+++    ap_obj = set_default_accesspoint();
+++    when_null_trace(ap_obj, exit, ERROR, "Could not get the default accesspoint");
+++
+++    // Update connect_backhaul flags and get the current value
+++    amxd_status_t status = update_connect_backhaul_flags(&connect_backhaul, ap_obj);
+++    SAH_TRACEZ_INFO(ME, "connect_backhaul value = %d", connect_backhaul);
+++    when_failed_trace(status, exit, ERROR, "Failed to update connect backhaul flags: %d", status);
++ 
++-    ret = set_cell_iface_enabled(cell_iface, enable);
+++    SAH_TRACEZ_INFO(ME, "Using AccessPoint %s with X_QCOM_ConnectBackHaul=%d",
+++                    amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED), connect_backhaul);
+++    ret = set_cell_iface_enabled(cell_iface, enable, connect_backhaul, ap_obj);
++ 
++ exit:
++     return ret;
++diff --git a/src/dm_cellular_events.c b/src/dm_cellular_events.c
++index 5679e1a..7522620 100644
++--- a/src/dm_cellular_events.c
+++++ b/src/dm_cellular_events.c
++@@ -220,3 +220,259 @@ void _print_event(UNUSED const char* const event_name,
++         amxc_var_log(event_data);
++     }
++ }
+++
+++/**
+++ * @brief Handles the auto-connect case for ConnectBackHaul property.
+++ *
+++ * This function checks if X_QCOM_AutoConnect is enabled. If true, it prevents
+++ * direct modification of X_QCOM_ConnectBackHaul for the given AccessPoint
+++ * and sets it to the inverse of the attempted value.
+++ *
+++ * @param[in] ap_obj         The AccessPoint object whose ConnectBackHaul is being changed.
+++ * @param[in] parent_obj     The parent object of the AccessPoint (e.g., Cellular).
+++ * @param[in] connect_backhaul The intended new value of ConnectBackHaul.
+++ *
+++ * @return True if the auto-connect case was handled (i.e., X_QCOM_AutoConnect is true),
+++ *         false otherwise.
+++ */
+++static bool handle_auto_connect_case(amxd_object_t* ap_obj, amxd_object_t* parent_obj, bool connect_backhaul) {
+++    bool auto_connect = false;
+++    bool result = false;
+++
+++    auto_connect = amxd_object_get_bool(parent_obj, "X_QCOM_AutoConnect", NULL);
+++    SAH_TRACEZ_INFO(ME, "Value of auto_connect=%d", auto_connect);
+++
+++    if (!auto_connect) {
+++        result = false;
+++        goto exit;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "X_QCOM_AutoConnect is true. Cannot make any changes to ConnectBackHaul: %s",
+++                    amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED));
+++
+++    amxd_status_t status = amxd_object_set_value(bool, ap_obj, "X_QCOM_ConnectBackHaul", !connect_backhaul);
+++    when_true_trace(status != amxd_status_ok, exit, ERROR, "Failed to set X_QCOM_ConnectBackHaul to %d: %d",
+++                   !connect_backhaul, status);
+++
+++    SAH_TRACEZ_INFO(ME, "%s.X_QCOM_ConnectBackHaul set to %d",
+++                    amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED), !connect_backhaul);
+++    result = true;
+++
+++exit:
+++    return result;
+++}
+++
+++/**
+++ * @brief Checks for existing ConnectBackHaul connections among AccessPoint instances.
+++ *
+++ * This function iterates through all AccessPoint instances to see if another
+++ * instance already has X_QCOM_ConnectBackHaul set to true. If found, it will
+++ * prevent setting ConnectBackHaul on the current `ap_obj` and reset it to
+++ * the inverse of the attempted value.
+++ *
+++ * @param[in] ap             The AccessPoint root object (parent of all instances).
+++ * @param[in] ap_obj         The current AccessPoint object whose ConnectBackHaul is being changed.
+++ * @param[in] connect_backhaul The intended new value of ConnectBackHaul for `ap_obj`.
+++ *
+++ * @return True if another AccessPoint with ConnectBackHaul=true was found and handled,
+++ *         false otherwise.
+++ */
+++static bool set_backhaul_connections(amxd_object_t* ap,
+++                                               amxd_object_t* ap_obj,
+++                                               bool connect_backhaul) {
+++    bool result = false;
+++    amxc_llist_for_each(it, (&ap->instances)) {
+++        amxd_object_t* temp = amxc_llist_it_get_data(it, amxd_object_t, it);
+++        when_null_trace(temp, exit, ERROR, "Temporary AccessPoint object is NULL");
+++
+++        if (temp == ap_obj) {
+++            continue;
+++        }
+++
+++        if (amxd_object_get_bool(temp, "X_QCOM_ConnectBackHaul", NULL)) {
+++            SAH_TRACEZ_INFO(ME, "Found ConnectBackHaul: %s",
+++                            amxd_object_get_path(temp, AMXD_OBJECT_INDEXED));
+++
+++            amxd_status_t status = amxd_object_set_value(bool, ap_obj, "X_QCOM_ConnectBackHaul", !connect_backhaul);
+++            when_true_trace(status != amxd_status_ok, exit, ERROR, "Failed to set X_QCOM_ConnectBackHaul to %d: %d",
+++                           !connect_backhaul, status);
+++
+++            SAH_TRACEZ_INFO(ME, "%s.X_QCOM_ConnectBackHaul set to %d",
+++                            amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED), !connect_backhaul);
+++            result = true;
+++            goto exit;
+++        }
+++    }
+++
+++exit:
+++    return result;
+++}
+++
+++/**
+++ * @brief Handle changes to the ConnectBackHaul parameter of an AccessPoint.
+++ *
+++ * This function is called when the ConnectBackHaul parameter of an AccessPoint changes.
+++ * Initiates connection when true and disconnects when false.
+++ *
+++ * @param[in] sig_name The name of the signal (unused).
+++ * @param[in] data     The data associated with the signal, containing the new ConnectBackHaul value.
+++ * @param[in] priv     Private data (unused).
+++ *
+++ * @return None
+++ */
+++void _access_point_connect_backhaul_changed(UNUSED const char* const sig_name,
+++                                           const amxc_var_t* const data,
+++                                           UNUSED void* const priv) {
+++    SAH_TRACEZ_INFO(ME, "Entering _access_point_connect_backhaul_changed");
+++    int ret = -1;
+++    when_null_trace(data, exit, ERROR, "Input data parameter is null");
+++
+++    bool connect_backhaul = GETP_BOOL(data, "parameters.X_QCOM_ConnectBackHaul.to");
+++    amxd_object_t* ap_obj = amxd_dm_signal_get_object(cellular_get_dm(), data);
+++    when_null_trace(ap_obj, exit, ERROR, "Could not get ap_obj value");
+++
+++    amxd_object_t* ap = amxd_object_get_parent(ap_obj);
+++    when_null_trace(ap, exit, ERROR, "Could not get parent value");
+++
+++    SAH_TRACEZ_INFO(ME, "Value of Connect BackHaul = %d for AccessPoint = %s",
+++                    connect_backhaul, amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED));
+++
+++    amxd_object_t* parent_obj = amxd_object_get_parent(ap);
+++    when_null_trace(parent_obj, exit, ERROR, "Could not get parent object value");
+++
+++    if (handle_auto_connect_case(ap_obj, parent_obj, connect_backhaul)) {
+++        goto exit;
+++    }
+++
+++    if (set_backhaul_connections(ap, ap_obj, connect_backhaul)) {
+++        goto exit;
+++    }
+++
+++    amxd_dm_t* dm = cellular_get_dm();
+++    amxd_object_t* intf_dm = amxd_dm_findf(dm, "Cellular.Interface.1");
+++    when_null_trace(intf_dm, exit, ERROR, "Cellular.Interface.1 not found");
+++
+++    cell_iface_t* cell_iface = (cell_iface_t*) intf_dm->priv;
+++    when_null_trace(cell_iface, exit, ERROR, "Object private data is null");
+++
+++    bool enable = amxd_object_get_bool(intf_dm, "Enable", NULL);
+++    SAH_TRACEZ_INFO(ME,"Value of enable = %d", enable);
+++
+++    SAH_TRACEZ_INFO(ME, "%s using set_cell_iface_enabled",
+++                    connect_backhaul ? "Connecting BackHaul" : "Disconnecting BackHaul");
+++    ret = set_cell_iface_enabled(cell_iface, enable, connect_backhaul, ap_obj);
+++    when_failed_trace(ret, exit, ERROR, "Failed to %s cell interface %s: %d",
+++                     enable ? "enable" : "disable", intf_dm, ret);
+++
+++exit:
+++    return;
+++}
+++
+++/**
+++ * @brief Set the default profile for an AccessPoint.
+++ *
+++ * This function resets the default profile for an AccessPoint by setting the
+++ * X_QCOM_DefaultProfile parameter to false for other AccessPoints if necessary.
+++ *
+++ * @param[in] ap_obj The AccessPoint object for which the default profile is being set.
+++ * @param[in] ap     The parent AccessPoint object.
+++ *
+++ * @return The status of the operation.
+++ */
+++static amxd_status_t set_default_profile(amxd_object_t* ap_obj, amxd_object_t* ap) {
+++    amxd_status_t status = amxd_status_ok;
+++    amxc_llist_for_each(it, (&ap->instances)) {
+++        amxd_object_t* temp = amxc_llist_it_get_data(it, amxd_object_t, it);
+++        if (temp != ap_obj && amxd_object_get_bool(temp, "X_QCOM_DefaultProfile", NULL)) {
+++            status = amxd_object_set_value(bool, temp, "X_QCOM_DefaultProfile", false);
+++            if (status != amxd_status_ok) {
+++                SAH_TRACEZ_ERROR(ME, "Failed to set X_QCOM_DefaultProfile to FALSE for %s",
+++                                amxd_object_get_path(temp, AMXD_OBJECT_INDEXED));
+++                return status;
+++            }
+++            break;
+++        }
+++    }
+++    return status;
+++}
+++
+++/**
+++ * @brief Ensures that at least one AccessPoint has the DefaultProfile set to true.
+++ *
+++ * @param[in] ap_obj The AccessPoint object for which the DefaultProfile is being set.
+++ * @param[in] ap     The parent AccessPoint object.
+++ * @param[in] default_profile A pointer to a boolean indicating the new DefaultProfile value.
+++ *
+++ * @return The status of the operation.
+++ */
+++static amxd_status_t handle_default_profile(amxd_object_t* ap_obj,
+++                                           amxd_object_t* ap,
+++                                           bool* default_profile) {
+++    amxd_status_t status = amxd_status_ok;
+++    bool is_last_default = true;
+++
+++    if (!(*default_profile)) {
+++        // Check if this AccessPoint is the only one with X_QCOM_DefaultProfile set to true
+++        amxc_llist_for_each(it, (&ap->instances)) {
+++            amxd_object_t* temp = amxc_llist_it_get_data(it, amxd_object_t, it);
+++            // If another AccessPoint has X_QCOM_DefaultProfile=true
+++            // This accesspoint is not the last default
+++            if (temp != ap_obj && amxd_object_get_bool(temp, "X_QCOM_DefaultProfile", NULL)) {
+++                is_last_default = false;
+++                break;
+++            }
+++        }
+++
+++        // If this is the only default profile, prevent setting X_QCOM_DefaultProfile to false
+++        if (is_last_default) {
+++            SAH_TRACEZ_ERROR(ME, "Cannot set X_QCOM_DefaultProfile to FALSE for %s: At least one default required",
+++                            amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED));
+++            amxd_object_set_value(bool, ap_obj, "X_QCOM_DefaultProfile", true);
+++            *default_profile = true;
+++            goto exit;
+++        }
+++    } else {
+++        status = set_default_profile(ap_obj, ap);
+++        when_failed_trace(status, exit, ERROR, "Failed to set default profile");
+++    }
+++
+++exit:
+++    return status;
+++}
+++
+++/**
+++ * @brief Handle changes to the DefaultProfile parameter of an AccessPoint.
+++ *
+++ * This function is called when the DefaultProfile parameter of an AccessPoint changes.
+++ * It ensures that at least one AccessPoint has the DefaultProfile set to true.
+++ *
+++ * @param[in] sig_name The name of the signal (unused).
+++ * @param[in] data     The data associated with the signal, containing the new DefaultProfile value.
+++ * @param[in] priv     Private data (unused).
+++ *
+++ * @return None
+++ */
+++void _access_point_default_profile_changed(UNUSED const char* const sig_name,
+++                                          const amxc_var_t* const data,
+++                                          UNUSED void* const priv) {
+++    SAH_TRACEZ_INFO(ME, "Entering _access_point_default_profile_changed");
+++    amxd_status_t status = amxd_status_ok;
+++    when_null_trace(data, exit, ERROR, "Input data parameter is null");
+++    bool default_profile = GETP_BOOL(data, "parameters.X_QCOM_DefaultProfile.to");
+++
+++    amxd_object_t* ap_obj = amxd_dm_signal_get_object(cellular_get_dm(), data);
+++    when_null_trace(ap_obj, exit, ERROR, "Could not get ap_obj value");
+++
+++    amxd_object_t* ap = amxd_object_get_parent(ap_obj);
+++    when_null_trace(ap, exit, ERROR, "Could not get parent value");
+++
+++    status = handle_default_profile(ap_obj, ap, &default_profile);
+++    if (status != amxd_status_ok) {
+++        goto exit;
+++    }
+++
+++    SAH_TRACEZ_INFO(ME, "%s.X_QCOM_DefaultProfile set to %d",
+++                    amxd_object_get_path(ap_obj, AMXD_OBJECT_INDEXED), default_profile);
+++exit:
+++    return;
+++}
++-- 
++2.34.1
++
+-- 
+2.34.1
+
