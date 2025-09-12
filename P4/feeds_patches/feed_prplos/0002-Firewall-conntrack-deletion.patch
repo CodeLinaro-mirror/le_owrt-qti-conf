@@ -1,0 +1,1048 @@
+From ca26c001dac0b562c065ab9c54533be121c2c64e Mon Sep 17 00:00:00 2001
+From: Sindoori Bindhu <sbindhu@qti.qualcomm.com>
+Date: Sat, 30 Aug 2025 21:56:59 +0530
+Subject: [PATCH] Firewall conntrack deletion
+
+---
+ .../0002-firewall-conntrack-deletion.patch    | 1029 +++++++++++++++++
+ 1 file changed, 1029 insertions(+)
+ create mode 100644 qos_firewall/plugins/tr181-firewall/patches/0002-firewall-conntrack-deletion.patch
+
+diff --git a/qos_firewall/plugins/tr181-firewall/patches/0002-firewall-conntrack-deletion.patch b/qos_firewall/plugins/tr181-firewall/patches/0002-firewall-conntrack-deletion.patch
+new file mode 100644
+index 0000000..f402c09
+--- /dev/null
++++ b/qos_firewall/plugins/tr181-firewall/patches/0002-firewall-conntrack-deletion.patch
+@@ -0,0 +1,1029 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++From f30883c697cf174ddb7eadacb0a33bccc51ccc4a Mon Sep 17 00:00:00 2001
++From: Sindoori Bindhu <sbindhu@qti.qualcomm.com>
++Date: Sat, 30 Aug 2025 21:37:10 +0530
++Subject: [PATCH] base commit
++
++---
++ include_priv/firewall/firewall_conntrack.h    |  52 ++
++ makefile                                      |   4 +
++ .../include_priv/mod_fw_conntrack.h           |  59 +++
++ mod-fw-conntrack/src/makefile                 |  61 +++
++ mod-fw-conntrack/src/mod_fw_conntrack.c       | 175 +++++++
++ odl/firewall/firewall_definition.odl          |   9 +-
++ src/entrypoint.c                              |   1 +
++ src/firewall/dm_firewall_events.c             |  12 +-
++ src/firewall/dm_rule_events.c                 |  16 +
++ src/firewall/firewall_conntrack.c             | 451 ++++++++++++++++++
++ 10 files changed, 837 insertions(+), 3 deletions(-)
++ create mode 100644 include_priv/firewall/firewall_conntrack.h
++ create mode 100644 mod-fw-conntrack/include_priv/mod_fw_conntrack.h
++ create mode 100644 mod-fw-conntrack/src/makefile
++ create mode 100644 mod-fw-conntrack/src/mod_fw_conntrack.c
++ create mode 100644 src/firewall/firewall_conntrack.c
++
++diff --git a/include_priv/firewall/firewall_conntrack.h b/include_priv/firewall/firewall_conntrack.h
++new file mode 100644
++index 0000000..b487fa7
++--- /dev/null
+++++ b/include_priv/firewall/firewall_conntrack.h
++@@ -0,0 +1,52 @@
+++/****************************************************************************
+++**
+++** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++** SPDX-License-Identifier: BSD-3-Clause-Clear
+++**
+++**
+++****************************************************************************/
+++
+++#ifndef __FIREWALL_CONNTRACK_H__
+++#define __FIREWALL_CONNTRACK_H__
+++
+++#include <string.h>
+++
+++#include "firewall/dm_firewall.h"
+++#include "firewall/level.h"
+++#include "policy/policy.h"  // for extendedpolicy_t
+++#include "firewall.h"       // for fw_get_dm
+++#include "chains.h"  //added to access chain_t structure
+++#include "rules.h"   //added to access rule_t structure
+++#include "ports.h"   //added for port_range_t structure
+++#include "protocols.h"
+++#include <amxm/amxm.h>
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++
+++#define ME "firewall"
+++#define FIREWALL_OBJ "Firewall." //firewall dm
+++#define SIZE 64
+++#define IPv4_SIZE 64  //size of IPv4 address
+++#define IPv6_SIZE 128 //size of IPv6 address
+++#define DEFAULT_IPv4 "0.0.0.0"  //default IPv4 address
+++#define DEFAULT_IPv6 "::"       //default IPv6 address
+++#define ACCEPT "Accept"
+++#define DROP "Drop"
+++#define REJECT "Reject"
+++#define DEMO_WANMODE "demo_wanmode"
+++#define CELLULAR "Cellular"
+++#define IPv4_VERSION 4
+++#define IPv6_VERSION 6
+++#define QCOMCONTROLLER "QCOMController"
+++
+++
+++int get_ip_version(amxd_object_t* object);  //to fetch the IP version from the dm
+++void get_lan_ip_address(int ip_version,char* ip, size_t size);  //to fetch the current lan IP address
+++void get_wan_ip_address(int ip_version,char* ip,size_t size);   //to fetch the current wan IP address
+++const char* get_wan_interface(void);  //to fetch the current wan interface
+++//construct the arguments to pass to the controller
+++void construct_controller_args(char* src_ip, char* dst_ip, int sport, int dport, int protocol, amxc_var_t* args);
+++void handle_mark_rule(amxc_var_t* var, rule_t* rule, int ip_version);  //to add the mark rule
+++void conntrack_execute(amxc_var_t* var,policy_t* policy);  //to execute conntrack deletion
+++
+++#endif //__FIREWALL_CONNTRACK_H__
++diff --git a/makefile b/makefile
++index 47d9d74..1ec5472 100644
++--- a/makefile
+++++ b/makefile
++@@ -22,16 +22,19 @@ endef
++ all:
++ 	$(MAKE) -C src all
++ 	$(MAKE) -C mod-qcom-vpnPassthrough/src all
+++	$(MAKE) -C mod-fw-conntrack/src all
++ 	$(MAKE) -C odl all
++ 
++ clean:
++ 	$(MAKE) -C src clean
+++	$(MAKE) -C mod-fw-conntrack/src clean
++ 	$(MAKE) -C odl clean
++ 	$(MAKE) -C test clean
++ 
++ install: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(DEST)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-qcom-vpnPassthrough.so $(DEST)/usr/lib/amx/$(COMPONENT)/modules/mod-qcom-vpnPassthrough.so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-fw-conntrack.so $(DEST)/usr/lib/amx/$(COMPONENT)/modules/mod-fw-conntrack.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_caps.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_caps.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++@@ -111,6 +114,7 @@ endif
++ package: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-qcom-vpnPassthrough.so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/modules/mod-qcom-vpnPassthrough.so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-fw-conntrack.so $(DEST)/usr/lib/amx/$(COMPONENT)/modules/mod-fw-conntrack.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_caps.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_caps.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++diff --git a/mod-fw-conntrack/include_priv/mod_fw_conntrack.h b/mod-fw-conntrack/include_priv/mod_fw_conntrack.h
++new file mode 100644
++index 0000000..e4f7be5
++--- /dev/null
+++++ b/mod-fw-conntrack/include_priv/mod_fw_conntrack.h
++@@ -0,0 +1,59 @@
+++/****************************************************************************
+++**
+++** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++** SPDX-License-Identifier: BSD-3-Clause-Clear
+++**
+++**
+++****************************************************************************/
+++#ifndef __MOD_FW_CONNTRACK_H__
+++#define __MOD_FW_CONNTRACK__H__
+++
+++#ifdef __cplusplus
+++extern "C"
+++{
+++#endif
+++
+++#include <amxc/amxc_macros.h>
+++#include <amxc/amxc.h>
+++#include <amxm/amxm.h>
+++
+++#ifdef __cplusplus
+++}
+++#endif
+++
+++#include <string.h>
+++#include <sys/sysinfo.h>
+++
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include <dlfcn.h> //added to use dl functions
+++
+++#define MOD_FW_CONNTRACK "mod-fw-conntrack"
+++#define ME "mod-conntrack"
+++#define MOD_PATH "/usr/lib/mod-qcom-conntrack.so"
+++#define ADD "add"
+++#define DEL "del"
+++#define IPv4_VERSION 4
+++#define IPv6_VERSION 6
+++
+++void* handle;
+++
+++static int blacklist_conntrack(const char* function_name,
+++                               amxc_var_t* args,
+++                               amxc_var_t* ret);
+++
+++static int whitelist_conntrack(const char* function_name,
+++                               amxc_var_t* args,
+++                               amxc_var_t* ret);
+++
+++static int add_mark_fw_rule(const char* function_name,
+++                        amxc_var_t* args,
+++                        amxc_var_t* ret);
+++
+++static int del_mark_fw_rule(const char* function_name,
+++                        amxc_var_t* args,
+++                        amxc_var_t* ret);
+++
+++void fetch_five_tuple(amxc_var_t* args, char** src_ip, char** dst_ip, int* src_port, int* dst_port, int* protocol);
+++
+++#endif //__MOD_FW_CONNTRACK_H__
++diff --git a/mod-fw-conntrack/src/makefile b/mod-fw-conntrack/src/makefile
++new file mode 100644
++index 0000000..9a3829b
++--- /dev/null
+++++ b/mod-fw-conntrack/src/makefile
++@@ -0,0 +1,61 @@
+++include ../../makefile.inc
+++
+++# build destination directories
+++OBJDIR = ../../output/$(MACHINE)
+++
+++# TARGETS
+++MODULE = mod-fw-conntrack
+++TARGET_SO = $(OBJDIR)/$(MODULE).so
+++
+++# directories
+++# source directories
+++SRCDIR = .
+++INCDIR_PRIV = ../include_priv
+++INCDIRS = $(INCDIR_PRIV) $(if $(STAGINGDIR), $(STAGINGDIR)/include $(STAGINGDIR)/usr/include)
+++STAGING_LIBDIR = $(if $(STAGINGDIR), -L$(STAGINGDIR)/lib) $(if $(STAGINGDIR), -L$(STAGINGDIR)/usr/lib)
+++
+++SOURCES = $(wildcard $(SRCDIR)/*.c)
+++OBJECTS = $(addprefix $(OBJDIR)/,$(notdir $(SOURCES:.c=.o)))
+++
+++# LIB_PATH = /usr/lib/amx/modules
+++# LIB_NAME = mod-qcom-conntrack.so
+++
+++# CFLAGS += -I$(LIB_PATH)
+++# LDFLAGS += -L$(LIB_PATH) -l:$(LIB_NAME) //link the shared library
+++
+++# compilation and linking flags
+++CFLAGS += -Werror -Wall -Wextra \
+++		  -Wformat=2 -Wshadow \
+++		  -Wwrite-strings -Wredundant-decls \
+++		  -Wmissing-declarations -Wno-attributes \
+++		  -Wno-format-nonliteral \
+++		  -DSAHTRACES_ENABLED -DSAHTRACES_LEVEL=500 \
+++		  -fPIC -g3 $(addprefix -I ,$(INCDIRS))
+++
+++ifeq ($(CC_NAME),g++)
+++	CFLAGS += -std=c++2a
+++else
+++	CFLAGS += -Wstrict-prototypes -Wold-style-definition -Wnested-externs -std=gnu11
+++endif
+++
+++LDFLAGS += -shared -fPIC $(STAGING_LIBDIR) -lamxc -lamxm -lsahtrace
+++
+++# targets
+++all: $(TARGET_SO)
+++
+++$(TARGET_SO): $(OBJECTS)
+++	$(CC) -Wl,-soname,$(MODULE).so -o $@ $(OBJECTS) $(LDFLAGS)
+++
+++-include $(OBJECTS:.o=.d)
+++
+++$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)/
+++	$(CC) $(CFLAGS) -c -o $@ $<
+++	@$(CC) $(CFLAGS) -MM -MP -MT '$(@) $(@:.o=.d)' -MF $(@:.o=.d) $(<)
+++
+++$(OBJDIR)/:
+++	$(MKDIR) -p $@
+++
+++clean:
+++	rm -rf ../output/ ../$(MODULE)-*.* ../$(MODULE)_*.*
+++
+++.PHONY: all clean
++diff --git a/mod-fw-conntrack/src/mod_fw_conntrack.c b/mod-fw-conntrack/src/mod_fw_conntrack.c
++new file mode 100644
++index 0000000..db4cd3c
++--- /dev/null
+++++ b/mod-fw-conntrack/src/mod_fw_conntrack.c
++@@ -0,0 +1,175 @@
+++/****************************************************************************
+++ **
+++ ** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++ ** SPDX-License-Identifier: BSD-3-Clause-Clear
+++ **
+++ **
+++ ****************************************************************************/
+++#include "mod_fw_conntrack.h"
+++
+++static AMXM_CONSTRUCTOR module_start(void) {
+++    SAH_TRACEZ_IN(ME);
+++    amxm_shared_object_t* so = amxm_so_get_current();
+++    amxm_module_t* mod = NULL;
+++
+++    amxm_module_register(&mod, so, MOD_FW_CONNTRACK);
+++    amxm_module_add_function(mod, "blacklist-conntrack", blacklist_conntrack);
+++    amxm_module_add_function(mod, "whitelist-conntrack", whitelist_conntrack);
+++    amxm_module_add_function(mod, "add-mark-fw-rule", add_mark_fw_rule);
+++    amxm_module_add_function(mod, "del-mark-fw-rule", del_mark_fw_rule);
+++
+++    handle = dlopen(MOD_PATH, RTLD_LAZY);
+++    if (!handle) {
+++        SAH_TRACEZ_ERROR(ME, "dlopen error: %s\n", dlerror());
+++        return 1;
+++    }
+++    SAH_TRACEZ_OUT(ME);
+++    return 0;
+++}
+++
+++//Function to fetch the five tuple args from amxc_var_t* args
+++void fetch_five_tuple(amxc_var_t* args, char** src_ip, char** dst_ip, int* src_port, int* dst_port, int* protocol) {
+++    *src_ip = args[0].data.s;
+++    *dst_ip = args[1].data.s;
+++    *src_port = args[2].data.i32;
+++    *dst_port = args[3].data.i32;
+++    *protocol = args[4].data.i32;
+++}
+++
+++//Function to invoke blacklist delete conntrack API
+++static int blacklist_conntrack(UNUSED const char* function_name,
+++        UNUSED amxc_var_t* args,
+++        UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_INFO(ME, "conntrack deletion for blacklist");
+++
+++    int (*blacklist_function)(char*, char*, int, int, int, char*, int, char*);
+++    blacklist_function = dlsym(handle, "BlacklistDeleteConntrack");
+++    if (!blacklist_function) {
+++        SAH_TRACEZ_ERROR(ME, "Error linking blacklist function: %s\n", dlerror());
+++        return 1;
+++    }
+++
+++    char *src_ip = NULL, *dst_ip = NULL;
+++    int src_port = 0, dst_port = 0, protocol = 0;
+++    fetch_five_tuple(args, &src_ip, &dst_ip, &src_port, &dst_port, &protocol);
+++
+++    char* wan_ip = args[6].data.s;
+++    int ip_version = args[7].data.i32;
+++    char* wan_interface = args[8].data.s;
+++
+++    //invoke blacklist API for handling UL traffic IPv4/v6
+++    blacklist_function(dst_ip, src_ip, src_port, dst_port, protocol, wan_ip, ip_version, wan_interface);
+++    if(ip_version == IPv4_VERSION ){
+++        //invoke blacklist API for handling DL traffic IPv4
+++        blacklist_function(src_ip, wan_ip, src_port, dst_port, protocol, wan_ip, ip_version, wan_interface);
+++    }
+++    if(ip_version == IPv6_VERSION){
+++        //invoke blacklist API for handling DL traffic IPv6
+++        blacklist_function(src_ip, dst_ip, src_port, dst_port, protocol, wan_ip, ip_version, wan_interface);
+++    }
+++    return 0;
+++}
+++
+++//Function to invoke whitelist delete conntrack API
+++static int whitelist_conntrack(UNUSED const char* function_name,
+++        UNUSED amxc_var_t* args,
+++        UNUSED amxc_var_t* ret) {
+++
+++    SAH_TRACEZ_INFO(ME, "conntrack deletion for whitelist");
+++
+++    int (*whitelist_function)(char*, char*, int, int, int, char*, char*, int, char*);
+++    whitelist_function = dlsym(handle, "WhitelistDeleteConntrack");
+++    if (!whitelist_function) {
+++        SAH_TRACEZ_ERROR(ME, "Error linking whitelist function: %s\n", dlerror());
+++        return 1;
+++    }
+++
+++    char *src_ip = NULL, *dst_ip = NULL;
+++    int src_port = 0, dst_port = 0, protocol = 0;
+++    fetch_five_tuple(args, &src_ip, &dst_ip, &src_port, &dst_port, &protocol);
+++
+++    char* lan_ip = args[5].data.s;
+++    char* wan_ip = args[6].data.s;
+++    int ip_version = args[7].data.i32;
+++    char* wan_interface = args[8].data.s;
+++
+++    //invoke whitelist API for handling UL traffic IPv4/v6
+++    whitelist_function(dst_ip, src_ip, src_port, dst_port, protocol, lan_ip, wan_ip, ip_version, wan_interface);
+++    if(ip_version == IPv4_VERSION){
+++        //invoke whitelist API for handling DL traffic IPv4
+++        whitelist_function(src_ip, wan_ip, src_port, dst_port, protocol, lan_ip, wan_ip, ip_version, wan_interface);
+++    }
+++    if(ip_version == IPv6_VERSION){
+++        //invoke whitelist API for handling DL traffic IPv6
+++        whitelist_function(src_ip, dst_ip, src_port, dst_port, protocol, lan_ip, wan_ip, ip_version, wan_interface);
+++    }
+++
+++    return 0;
+++}
+++
+++/*Function to add rules to mangle table with mark
+++ *args[] contains the informations required to build the mangle table rule
+++ */
+++static int add_mark_fw_rule(UNUSED const char* function_name,
+++        UNUSED amxc_var_t* args,
+++        UNUSED amxc_var_t* ret) {
+++
+++    SAH_TRACEZ_INFO(ME,"add mark rule function");
+++
+++    int (*add_mark_rule_function)(const char*, char*, char*, int, int, int, char*);
+++    add_mark_rule_function = dlsym(handle, "AddOrDelMarkFWRule");
+++    if (!add_mark_rule_function) {
+++        SAH_TRACEZ_ERROR(ME, "Error linking mark_rule function: %s\n", dlerror());
+++        return 1;
+++    }
+++    //Fetching the corresponding values from args[]
+++    char* src_ip = args[0].data.s;
+++    char* dst_ip = args[1].data.s;
+++    int dst_port = args[3].data.i32;
+++    int protocol = args[4].data.i32;
+++    int ip_version = args[5].data.i32;
+++    char* wan_ip = args[6].data.s;
+++
+++    SAH_TRACEZ_INFO(ME, "rule parameters: src_ip:%s, dst_ip:%s, dst_port:%d, protocol:%d",
+++            src_ip, dst_ip, dst_port, protocol);
+++    //Invoking the function in mod-qcom-conntrack module to add the rule
+++    add_mark_rule_function(ADD, src_ip, dst_ip, dst_port, protocol, ip_version, wan_ip);
+++    return 0;
+++}
+++
+++/*Function to delete rules in mangle table with mark
+++ *args[] contains the infos required to delete the mangle table rule
+++ */
+++static int del_mark_fw_rule(UNUSED const char* function_name,
+++        UNUSED amxc_var_t* args,
+++        UNUSED amxc_var_t* ret) {
+++
+++    SAH_TRACEZ_INFO(ME,"delete mark rule function");
+++
+++    int (*del_mark_rule_function)(const char*, char*, char*, int, int, int, char*);
+++    del_mark_rule_function = dlsym(handle, "AddOrDelMarkFWRule");
+++    if (!del_mark_rule_function) {
+++        SAH_TRACEZ_ERROR(ME, "Error linking mark_rule function: %s\n", dlerror());
+++        return 1;
+++    }
+++    //Fetching the corresponding values from args[]
+++    char* src_ip = args[0].data.s;
+++    char* dst_ip = args[1].data.s;
+++    int dst_port = args[3].data.i32;
+++    int protocol = args[4].data.i32;
+++    int ip_version = args[5].data.i32;
+++    char* wan_ip = args[6].data.s;
+++
+++    SAH_TRACEZ_INFO(ME, "rule parameters: src_ip:%s, dst_ip:%s, dst_port:%d, protocol:%d",
+++            src_ip, dst_ip, dst_port, protocol);
+++    //Invoking the function in mod-qcom-conntrack module to delete the rule
+++    del_mark_rule_function(DEL, src_ip, dst_ip, dst_port, protocol, ip_version, wan_ip);
+++    return 0;
+++}
+++/*Destructor function to close the handle*/
+++static AMXM_DESTRUCTOR module_stop(void) {
+++    SAH_TRACEZ_IN(ME);
+++    dlclose(handle);
+++    SAH_TRACEZ_OUT(ME);
+++    return 0;
+++}
++diff --git a/odl/firewall/firewall_definition.odl b/odl/firewall/firewall_definition.odl
++index 562dc37..adda1e2 100644
++--- a/odl/firewall/firewall_definition.odl
+++++ b/odl/firewall/firewall_definition.odl
++@@ -5,7 +5,7 @@
++      */
++     %persistent object Firewall {
++         on action destroy call firewall_cleanup;
++-        %protected %read-only csv_string SupportedControllers = "mod-qcom-vpnPassthrough";
+++        %protected %read-only csv_string SupportedControllers = "mod-qcom-vpnPassthrough, mod-fw-conntrack";
++         /**
++          * Enables or disables the Firewall.
++          * @version 1.0
++@@ -15,6 +15,13 @@
++             userflags %usersetting;
++         }
++ 
+++        /**
+++        * Specifies the name of the controller that interfaces with the module, mod-qcom-conntrack
+++        * responsible for managing conntrack deletions and handling mangle table packet operations
+++        * The name used should be the name of the so file without the extension
+++        */
+++        %persistent %read-only %protected string QCOMController = "mod-fw-conntrack";
+++
++         /**
++          * How this firewall is configured. Enumeration of:
++          * - High (The firewall implements the "Traffic Denied Inbound" and "Minimally Permit Common Services Outbound" components of the ICSA residential certification's Required Services Security Policy)
++diff --git a/src/entrypoint.c b/src/entrypoint.c
++index 2d73dfa..ecc7e27 100644
++--- a/src/entrypoint.c
+++++ b/src/entrypoint.c
++@@ -77,6 +77,7 @@
++ #include <amx_conntrack/conntrack.h>
++ #endif
++ #include <fwinterface/interface.h> // for fw_apply
+++#include "firewall/firewall_conntrack.h"  //to load controller
++ 
++ #define ME "firewall"
++ 
++diff --git a/src/firewall/dm_firewall_events.c b/src/firewall/dm_firewall_events.c
++index 9e7fb1b..7f9df33 100644
++--- a/src/firewall/dm_firewall_events.c
+++++ b/src/firewall/dm_firewall_events.c
++@@ -65,6 +65,10 @@
++ #include "rules.h"
++ #include "policy/policy.h" // for extendedpolicy_t
++ #include "firewall.h"      // for fw_get_dm
+++
+++#include "chains.h"  //added for chain_t structure
+++#include "ports.h"   //added for port_range_t
+++#include "protocols.h" //added for protoent
++ #include "init_cleanup.h"
++ #include "firewall/enable.h"
++ #include "firewall/icmp_logs.h"
++@@ -77,6 +81,7 @@
++ 
++ #define ME "firewall"
++ 
+++#include "firewall/firewall_conntrack.h"
++ static void activate_level(config_t config, amxd_object_t* object, amxd_dm_t* dm) {
++     FW_PROFILING_IN(TRACE_INTERNAL);
++     char* path = NULL;
++@@ -316,8 +321,11 @@ void _level_changed(UNUSED const char* const sig_name,
++ 
++                     policy_activate(policy);
++                 }
++-            }
++-            amxc_var_clean(&policies);
+++                // Executes the controller API to interact with module API for conntrack deletion
+++                conntrack_execute(var,policy);
+++
+++             }
+++             amxc_var_clean(&policies);
++         }
++     }
++     if(var3 != NULL) {
++diff --git a/src/firewall/dm_rule_events.c b/src/firewall/dm_rule_events.c
++index b7334c2..e1af82f 100644
++--- a/src/firewall/dm_rule_events.c
+++++ b/src/firewall/dm_rule_events.c
++@@ -75,6 +75,8 @@
++ #include <amxc/amxc_macros.h>
++ #include <fwinterface/interface.h> // for fw_apply
++ 
+++#include "firewall/firewall_conntrack.h"
+++
++ #define ME "firewall"
++ 
++ /**
++@@ -229,6 +231,8 @@ void _firewall_rule_changed(UNUSED const char* const sig_name,
++                             const amxc_var_t* const event_data,
++                             UNUSED void* const priv) {
++     FW_PROFILING_IN(TRACE_DM_EVENT);
+++    SAH_TRACEZ_INFO(ME,"called _firewall_rule_changed\n");
+++
++     amxd_object_t* object = amxd_dm_signal_get_object(fw_get_dm(), event_data);
++     amxc_var_t* params = GET_ARG(event_data, "parameters");
++     amxc_var_t* var = NULL;
++@@ -236,6 +240,7 @@ void _firewall_rule_changed(UNUSED const char* const sig_name,
++     rule_t* rule = NULL;
++     ipversion_t ipversion = IPvAll;
++     bool ipversion_changed = false;
+++    amxc_var_t* enable_var = NULL;
++ 
++     when_null(object, exit);
++     when_null(object->priv, exit);
++@@ -298,6 +303,11 @@ void _firewall_rule_changed(UNUSED const char* const sig_name,
++     mask_or_ip_changed(true, params, object, "SourceMask", "SourceIP", rule_set_source, rule);
++     mask_or_ip_changed(true, params, object, "DestMask", "DestIP", rule_set_destination, rule);
++ 
+++    enable_var = GET_ARG(params, "Enable");
+++    if(enable_var != NULL) {
+++        rule_set_enable(rule, GET_BOOL(enable_var, "to"));
+++    }
+++
++     var = GET_ARG(params, "SourceMatchSet");
++     if(var != NULL) {
++         decrement_set_ref(GET_CHAR(var, "from"));
++@@ -330,6 +340,8 @@ void _firewall_rule_changed(UNUSED const char* const sig_name,
++     var = GET_ARG(params, "IPVersion");
++     if(var != NULL) {
++         ipversion_changed = true;
+++        rule->common.ipversion = GET_INT32(var, "to");
+++        rule->common.flags = FW_MODIFIED;
++     }
++     ipversion = object_get_ipversion(object);
++ 
++@@ -358,6 +370,10 @@ void _firewall_rule_changed(UNUSED const char* const sig_name,
++         rule_query_vendor_class_id(rule);
++     }
++ #endif
+++    if(enable_var != NULL) {
+++        int ip_version = get_ip_version(object);
+++	    handle_mark_rule(enable_var, rule, ip_version);
+++    }
++ 
++     rule_update(rule);
++ 
++diff --git a/src/firewall/firewall_conntrack.c b/src/firewall/firewall_conntrack.c
++new file mode 100644
++index 0000000..b895671
++--- /dev/null
+++++ b/src/firewall/firewall_conntrack.c
++@@ -0,0 +1,451 @@
+++/****************************************************************************
+++ **
+++ ** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++ ** SPDX-License-Identifier: BSD-3-Clause-Clear
+++ **
+++ **
+++ ****************************************************************************/
+++
+++#include "firewall/firewall_conntrack.h"
+++
+++// Fetches the IP version of the current rule
+++int get_ip_version(amxd_object_t* object) {
+++    const amxc_var_t* value = NULL;
+++    value = amxd_object_get_param_value(object, "IPVersion");
+++    when_null_trace(value, exit, ERROR, "%s has no parameter IPVersion", amxd_object_get_name(object, AMXD_OBJECT_NAMED));
+++    int version = GET_INT32(value, NULL);
+++    return version;
+++exit:
+++    return 1;
+++}
+++
+++// Fetches the current lan IP address
+++void get_lan_ip_address(int ip_version, char* ip, size_t size) {
+++    amxb_bus_ctx_t* bus_ctx;
+++    amxc_var_t lan_ip_var;
+++    amxc_string_t path;
+++
+++    const char* lan_ip = NULL;
+++    int retval = AMXB_ERROR_UNKNOWN;
+++
+++    bus_ctx = amxb_be_who_has("IP.");
+++    if (!bus_ctx) {
+++        SAH_TRACEZ_WARNING(ME, "bus_ctx is NULL\n");
+++    }
+++
+++    amxc_var_init(&lan_ip_var);
+++    amxc_string_init(&path, 0);
+++    if(ip_version == IPv4_VERSION) {
+++        amxc_string_setf(&path, "IP.Interface.[Alias=='lan'].IPv4Address.[Alias=='lan'].");
+++    }
+++    if(ip_version == IPv6_VERSION) {
+++        amxc_string_setf(&path, "IP.Interface.[Alias=='lan'].IPv6Address.[Alias=='ULA'].");
+++    }
+++
+++    retval = amxb_get(bus_ctx,amxc_string_get(&path, 0), 0, &lan_ip_var, 5);
+++    if (retval == AMXB_STATUS_OK) {
+++        lan_ip = GETP_CHAR(&lan_ip_var, "0.0.IPAddress");
+++    }
+++    else {
+++        SAH_TRACEZ_WARNING(ME,"Failed to fetch LAN IP Address. Error code: %d\n", retval);
+++    }
+++    strlcpy(ip, lan_ip, size);
+++    ip[size-1] = '\0';
+++
+++    amxc_var_clean(&lan_ip_var);
+++    amxc_string_clean(&path);
+++}
+++
+++// Fetches the current wan IP address
+++// Helper function to fetch WANMode
+++static const char* get_wan_mode(void) {
+++    amxb_bus_ctx_t* wan_bus_ctx = NULL;
+++    amxc_var_t wan_var;
+++    const char* wan_path = "WANManager.WANMode";
+++    char* wan_mode = NULL;
+++    //const char* value ="demo_wanmode";
+++    char wanmode[SIZE];
+++    int retval = AMXB_ERROR_UNKNOWN;
+++
+++    wan_bus_ctx = amxb_be_who_has("WANManager.");
+++    if (!wan_bus_ctx) {
+++        SAH_TRACEZ_WARNING(ME, "wan_bus_ctx is NULL\n");
+++        return NULL;
+++    }
+++    amxc_var_init(&wan_var);
+++    retval = amxb_get(wan_bus_ctx, wan_path, 0, &wan_var, 5);
+++    amxc_var_log(&wan_var);
+++    if (retval == AMXB_STATUS_OK) {
+++        wan_mode = amxc_var_dyncast(cstring_t, &wan_var);
+++        const char* colon = strrchr(wan_mode, ':');
+++        if (colon && *(colon + 1) != '\0') {
+++            strlcpy(wanmode, colon + 1, sizeof(wanmode));
+++            wanmode[sizeof(wanmode) - 1] = '\0';
+++        }
+++    }
+++    else {
+++        SAH_TRACEZ_WARNING(ME, "Failed to fetch WANMode. Error code: %d\n", retval);
+++    }
+++    amxc_var_clean(&wan_var);
+++    wan_mode = strdup(wanmode);
+++    if (!wan_mode) {
+++        SAH_TRACEZ_WARNING(ME, "Failed to allocate memory for wanmode");
+++        return NULL;
+++    }
+++    return wan_mode;
+++}
+++
+++void get_wan_ip_address(int ip_version, char* ip, size_t size) {
+++    amxb_bus_ctx_t* bus_ctx = NULL;
+++    amxc_var_t wan_ip_var;
+++    amxc_string_t path;
+++
+++    const char* wan_ip = NULL;
+++    int retval = AMXB_ERROR_UNKNOWN;
+++
+++    // Fetch WANMode
+++    const char* wanmode = get_wan_mode();
+++    if(wanmode == NULL){
+++        SAH_TRACEZ_ERROR(ME, "FAiled to fetch wanmode");
+++        return;
+++    }
+++    bus_ctx = amxb_be_who_has("IP.");
+++    if (!bus_ctx) {
+++        SAH_TRACEZ_WARNING(ME, "bus_ctx is NULL\n");
+++        return;
+++    }
+++    amxc_var_init(&wan_ip_var);
+++    amxc_string_init(&path, 0);
+++
+++    if (!strncmp(wanmode, DEMO_WANMODE, sizeof(DEMO_WANMODE))) {
+++        if (ip_version == IPv4_VERSION) {
+++            amxc_string_setf(&path, "IP.Interface.[Alias=='wan'].IPv4Address.[Alias=='primary'].");
+++        } else {
+++            amxc_string_setf(&path, "IP.Interface.[Alias=='wan'].IPv6Address.[Alias=='GUA_RA'].");
+++        }
+++    }
+++    else if(!strncmp(wanmode, CELLULAR, sizeof(CELLULAR))) {
+++        if (ip_version == IPv4_VERSION) {
+++            amxc_string_setf(&path, "IP.Interface.[Alias=='failover'].IPv4Address.[Alias=='primary'].");
+++        } else {
+++            amxc_string_setf(&path, "IP.Interface.[Alias=='failover'].IPv6Address.[Alias=='GUA_3GPP_NAS'].");
+++        }
+++    }
+++
+++    retval = amxb_get(bus_ctx,amxc_string_get(&path, 0), 0, &wan_ip_var,0);
+++    if (retval == AMXB_STATUS_OK) {
+++        wan_ip = GETP_CHAR(&wan_ip_var, "0.0.IPAddress");
+++    }
+++    else {
+++        SAH_TRACEZ_WARNING(ME,"Failed to fetch WAN IP Address. Error code: %d\n", retval);
+++    }
+++    SAH_TRACEZ_WARNING(ME,"Fetched wan IP address:%s\n",wan_ip);
+++    strlcpy(ip, wan_ip, size);
+++    ip[size-1]='\0';
+++
+++    amxc_var_clean(&wan_ip_var);
+++    amxc_string_clean(&path);
+++}
+++
+++const char* get_wan_interface(void) {
+++    amxb_bus_ctx_t* bus_ctx = NULL;
+++    amxc_var_t wan_interface_var;
+++    amxc_string_t path;
+++    const char* wan_interface = NULL;
+++    int retval = AMXB_ERROR_UNKNOWN;
+++
+++    // Fetch WANMode
+++    const char* wanmode = get_wan_mode();
+++    if(wanmode == NULL){
+++        SAH_TRACEZ_ERROR(ME, "Failed to fetch wanmode");
+++        return NULL;
+++    }
+++    bus_ctx = amxb_be_who_has("IP.");
+++    if (!bus_ctx) {
+++        SAH_TRACEZ_WARNING(ME, "bus_ctx is NULL\n");
+++        return NULL;
+++    }
+++
+++    amxc_var_init(&wan_interface_var);
+++    amxc_string_init(&path, 0);
+++
+++    if (!strncmp(wanmode, DEMO_WANMODE, sizeof(DEMO_WANMODE))) {
+++        amxc_string_setf(&path, "IP.Interface.[Alias=='wan'].");
+++    }
+++    else if(!strncmp(wanmode, CELLULAR, sizeof(CELLULAR))) {
+++        amxc_string_setf(&path, "IP.Interface.[Alias=='failover'].");
+++    }
+++
+++    retval = amxb_get(bus_ctx,amxc_string_get(&path, 0), 0, &wan_interface_var,5);
+++    if (retval == AMXB_STATUS_OK) {
+++        wan_interface = GETP_CHAR(&wan_interface_var, "0.0.Name");
+++    }
+++    else {
+++        SAH_TRACEZ_WARNING(ME,"Failed to fetch WAN interface. Error code: %d\n", retval);
+++    }
+++    amxc_var_clean(&wan_interface_var);
+++    amxc_string_clean(&path);
+++    return wan_interface;
+++}
+++
+++// Construct 5-tuple parameters as argument to the controller
+++void construct_controller_args(char* src_ip, char* dst_ip, int sport, int dport, int protocol, amxc_var_t* args) {
+++
+++    args[0].type_id = AMXC_VAR_ID_CSTRING;
+++    args[0].data.s = src_ip;
+++
+++    args[1].type_id = AMXC_VAR_ID_CSTRING;
+++    args[1].data.s = dst_ip;
+++
+++    args[2].type_id = AMXC_VAR_ID_INT32;
+++    args[2].data.i32 = sport;
+++
+++    args[3].type_id = AMXC_VAR_ID_INT32;
+++    args[3].data.i32 = dport;
+++
+++    args[4].type_id = AMXC_VAR_ID_INT32;
+++    args[4].data.i32 = protocol;
+++
+++}
+++
+++// Executes the controller API to interact with module API and add mark rule
+++void handle_mark_rule(amxc_var_t* var,rule_t* rule, int ip_version) {
+++
+++    int size = (ip_version == IPv4_VERSION) ? IPv4_SIZE : IPv6_SIZE;
+++    const char* default_ip = (ip_version == IPv4_VERSION) ? DEFAULT_IPv4 : DEFAULT_IPv6;
+++    int index = (ip_version == IPv4_VERSION) ? ADDRESS_IPv4 : ADDRESS_IPv6;
+++
+++    char src_ip1[size];
+++    strlcpy(src_ip1, default_ip, size);
+++    char dest_ip1[size];
+++    strlcpy(dest_ip1, default_ip, size);
+++    int src_port = 0;
+++    int dst_port = 0;
+++    int protocol = 0;
+++    bool enabled = GET_BOOL(var, "to");
+++
+++    // Extract source IP
+++    const char* s_ip = amxc_var_dyncast(cstring_t,rule->source.list[index]);
+++    if(s_ip && *s_ip){
+++        strlcpy(src_ip1,s_ip,sizeof(src_ip1));
+++    }
+++    char src_ip[size];
+++    strlcpy(src_ip, default_ip, size);
+++    sscanf(src_ip1,"[%[^/]",src_ip);
+++
+++    // Extract destination IP
+++    const char* d_ip = amxc_var_dyncast(cstring_t,rule->destination.list[index]);
+++    if(d_ip && *d_ip){
+++        strlcpy(dest_ip1,d_ip,sizeof(dest_ip1));
+++    }
+++    char dst_ip[size];
+++    strlcpy(dst_ip, default_ip, size);
+++    sscanf(dest_ip1,"[%[^/]",dst_ip);
+++
+++    // Extract source and destination ports
+++    amxc_llist_it_t* src_port_it = amxc_llist_get_first(&rule->src_ports);
+++    port_range_t* sport = (port_range_t*) calloc(1, sizeof(port_range_t));
+++    if(src_port_it) {
+++        sport = amxc_llist_it_get_data(src_port_it,port_range_t,it);
+++    }
+++    src_port = sport -> start;
+++
+++    amxc_llist_it_t* dst_port_it = amxc_llist_get_first(&rule->dst_ports);
+++    port_range_t* dport = (port_range_t*)calloc(1, sizeof(port_range_t));
+++    if(dst_port_it) {
+++        dport = amxc_llist_it_get_data(dst_port_it,port_range_t,it);
+++    }
+++    dst_port = dport -> start;
+++
+++    // Extract protocol
+++    amxc_var_t* first_protocol = amxc_var_get_first(&rule->common.protocols);
+++    if(first_protocol) {
+++        protocol = amxc_var_dyncast(int32_t,first_protocol);
+++    }
+++    SAH_TRACEZ_INFO(ME,"Source IP:%s,Dest IP:%s,Source port:%d,Dest port:%d,Protocol:%d,ip_version:%d\n", src_ip, dst_ip, src_port, dst_port, protocol, ip_version);
+++
+++    amxc_var_t args[7];
+++    for(int arg_count = 0; arg_count < 7; arg_count++) {
+++        amxc_var_init(&args[arg_count]);
+++    }
+++    if(src_port == 0){
+++        src_port = dst_port;
+++    }
+++
+++    construct_controller_args(src_ip, dst_ip, dst_port, src_port, protocol, args);
+++
+++
+++    args[5].type_id = AMXC_VAR_ID_INT32;
+++    args[5].data.i32 = ip_version;
+++    char wan_ip[size];
+++    get_wan_ip_address(ip_version, wan_ip, sizeof(wan_ip));
+++    args[6].type_id = AMXC_VAR_ID_CSTRING;
+++    args[6].data.s = (char*)wan_ip;
+++
+++    amxc_var_t ret;
+++    amxc_var_init(&ret);
+++    int retval = 1;
+++
+++    amxd_object_t* firewall_obj = amxd_dm_findf(fw_get_dm(), "%s", FIREWALL_OBJ);
+++    const amxc_var_t* controller_var = amxd_object_get_param_value(firewall_obj, QCOMCONTROLLER);
+++    const char* controller = GET_CHAR(controller_var, NULL);
+++
+++    if(enabled) {
+++        // Executes the controller API to add mark rule
+++        retval = amxm_execute_function(controller,
+++                controller,
+++                "add-mark-fw-rule",
+++                args,
+++                &ret);
+++        when_failed_trace(retval, exit, ERROR, "Cannot call add-mark-fw-rule : %d", retval);
+++    }
+++    else {
+++        // Executes the controller API to delete mark rule
+++        retval = amxm_execute_function(controller,
+++                controller,
+++                "del-mark-fw-rule",
+++                args,
+++                &ret);
+++        when_failed_trace(retval, exit, ERROR, "Cannot call del-mark-fw-rule : %d", retval);
+++    }
+++exit:
+++    return;
+++}
+++
+++// Executes the controller API to interact with module API for Blacklist/Whitelist conntrack deletion
+++void conntrack_execute(amxc_var_t* var, policy_t* policy) {
+++
+++    int ip_version = policy->common.ipversion;
+++    int size = (ip_version == IPv4_VERSION) ? IPv4_SIZE : IPv6_SIZE;
+++    const char* default_ip = (ip_version == IPv4_VERSION) ? DEFAULT_IPv4 : DEFAULT_IPv6;
+++    int index = (ip_version == IPv4_VERSION) ? ADDRESS_IPv4 : ADDRESS_IPv6;
+++
+++    const char* old_policy = GET_CHAR(var, "from");
+++    const char* new_policy = GET_CHAR(var, "to");
+++
+++    chain_t* chain = policy->chain;
+++    amxd_object_t* object = chain->object;
+++
+++    amxd_object_for_each(instance, it, amxd_object_findf(object, "%s", ".Rule")) {
+++        amxd_object_t* obj = amxc_container_of(it, amxd_object_t, it);
+++        rule_t* rule = NULL;
+++        if(obj->priv == NULL) {
+++            continue;
+++        }
+++        rule = (rule_t*) obj->priv;
+++        if(!rule) {
+++            continue;
+++        }
+++        char src_ip[size];
+++        strlcpy(src_ip, default_ip, size);
+++        char dest_ip[size];
+++        strlcpy(dest_ip, default_ip, size);
+++        int sport = 0;
+++        int dport = 0;
+++        int protocol = 0;
+++
+++        // Fetches source IP
+++        const char* s_ip = amxc_var_dyncast(cstring_t, rule->source.list[index]);
+++        if(s_ip && *s_ip){
+++            strlcpy(src_ip, s_ip, sizeof(src_ip));
+++        }
+++        char src_ipnew[size];
+++        strlcpy(src_ipnew, default_ip, size);
+++        sscanf(src_ip, "[%[^/]", src_ipnew);
+++
+++        // Fetches destination IP
+++        const char* d_ip = amxc_var_dyncast(cstring_t, rule->destination.list[index]);
+++        if(d_ip && *d_ip){
+++            strlcpy(dest_ip, d_ip, sizeof(dest_ip));
+++        }
+++        char dest_ipnew[size];
+++        strlcpy(dest_ipnew, default_ip, size);
+++        sscanf(dest_ip, "[%[^/]", dest_ipnew);
+++
+++        // Fetches source port
+++        amxc_llist_it_t* src_port_it = amxc_llist_get_first(&rule->src_ports);
+++        port_range_t* src_port = (port_range_t*)calloc(1, sizeof(port_range_t));
+++        if(src_port_it) {
+++            src_port = amxc_llist_it_get_data(src_port_it, port_range_t, it);
+++        }
+++        if(src_port) {
+++            sport = src_port -> start;
+++        }
+++        // Fetches destination port
+++        amxc_llist_it_t* dst_port_it = amxc_llist_get_first(&rule->dst_ports);
+++        port_range_t* dst_port = (port_range_t*)calloc(1, sizeof(port_range_t));
+++        if(dst_port_it) {
+++            dst_port = amxc_llist_it_get_data(dst_port_it, port_range_t, it);
+++        }
+++        if(dst_port) {
+++            dport = dst_port -> start;
+++        }
+++
+++        // Fetches protocol
+++        amxc_var_t* first_protocol = amxc_var_get_first(&rule->common.protocols);
+++        if(first_protocol) {
+++            protocol = amxc_var_dyncast(int32_t, first_protocol);
+++        }
+++        SAH_TRACEZ_INFO(ME,"Source IP:%s,Dest IP:%s,Source port:%d,Dest port:%d,Protocol:%d\n", src_ipnew, dest_ipnew, sport, dport, protocol);
+++
+++        char wan_ip[size], lan_ip[size];
+++        memset(wan_ip, 0, size);
+++        memset(lan_ip, 0, size);
+++
+++        get_lan_ip_address(ip_version, lan_ip, sizeof(lan_ip)); //Fetches lan IP
+++        get_wan_ip_address(ip_version, wan_ip, sizeof(wan_ip)); //Fetches wan IP
+++        const char* wan_interface = get_wan_interface(); //Fetches wan interface
+++
+++        amxc_var_t ret;
+++        amxc_var_init(&ret);
+++        int r = 1;
+++
+++        amxd_object_t* firewall_obj = amxd_dm_findf(fw_get_dm(), "%s", FIREWALL_OBJ);
+++        const amxc_var_t* controller_var = amxd_object_get_param_value(firewall_obj, QCOMCONTROLLER);
+++        const char* controller = GET_CHAR(controller_var, NULL);
+++
+++        amxc_var_t args[9];
+++        for(int arg_count = 0; arg_count < 9; arg_count++) {
+++            amxc_var_init(&args[arg_count]);
+++        }
+++        if(sport == 0){
+++            sport = dport;
+++        }
+++        construct_controller_args(src_ipnew, dest_ipnew, dport, sport, protocol, args);
+++
+++        args[5].type_id = AMXC_VAR_ID_CSTRING;
+++        args[5].data.s = (char*)lan_ip;
+++
+++        args[6].type_id = AMXC_VAR_ID_CSTRING;
+++        args[6].data.s = (char*)wan_ip;
+++
+++        args[7].type_id = AMXC_VAR_ID_INT32;
+++        args[7].data.i32 = ip_version;
+++
+++        args[8].type_id = AMXC_VAR_ID_CSTRING;
+++        args[8].data.s = (char*)wan_interface;
+++
+++        // Executes the controller API for blacklist
+++        if((!strncmp(old_policy, REJECT, sizeof(REJECT)) || !strncmp(old_policy, DROP, sizeof(DROP))) && !strncmp(new_policy, ACCEPT, sizeof(ACCEPT))){
+++            r = amxm_execute_function(controller,
+++                    controller,
+++                    "blacklist-conntrack",
+++                    args,
+++                    &ret);
+++            when_failed_trace(r, exit, ERROR, "Cannot call blacklist-conntrack : %d", r);
+++
+++        }
+++
+++        // Executes the controller API for whitelist
+++        if(!strncmp(old_policy, ACCEPT, sizeof(ACCEPT)) && (!strncmp(new_policy, DROP, sizeof(DROP)) || !strncmp(new_policy, REJECT, sizeof(REJECT)))){
+++            r = amxm_execute_function(controller,
+++                    controller,
+++                    "whitelist-conntrack",
+++                    args,
+++                    &ret);
+++            when_failed_trace(r, exit, ERROR, "Cannot call whitelist-conntrack : %d", r);
+++        }
+++    }
+++exit:
+++    return;
+++}
++-- 
++2.17.1
++
+-- 
+2.17.1
+
