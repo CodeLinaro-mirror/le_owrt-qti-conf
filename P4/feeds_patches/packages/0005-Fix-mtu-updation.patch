@@ -1,0 +1,50 @@
+From 607ce3ff6812c88aa4d0c6f53517ea0ff0c30803 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Tue, 26 Aug 2025 22:29:47 +0530
+Subject: [PATCH] Fix-mtu-updation
+
+---
+ .../patches/0002-Fix-mtu-updation.patch       | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+ create mode 100644 net/modemmanager/patches/0002-Fix-mtu-updation.patch
+
+diff --git a/net/modemmanager/patches/0002-Fix-mtu-updation.patch b/net/modemmanager/patches/0002-Fix-mtu-updation.patch
+new file mode 100644
+index 0000000..a3ad3d0
+--- /dev/null
++++ b/net/modemmanager/patches/0002-Fix-mtu-updation.patch
+@@ -0,0 +1,31 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From b0a4b05c805df544825d64170be6dcd8d7c251a4 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Tue, 26 Aug 2025 22:01:53 +0530
++Subject: [PATCH] Fix-mtu-updation
++
++---
++ src/mm-port-qmi.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/src/mm-port-qmi.c b/src/mm-port-qmi.c
++index 4d79a43..7c71fe8 100644
++--- a/src/mm-port-qmi.c
+++++ b/src/mm-port-qmi.c
++@@ -1002,7 +1002,7 @@ internal_reset (MMPortQmi           *self,
++                 mm_port_get_device (ctx->data));
++     mm_port_net_link_setup (MM_PORT_NET (ctx->data),
++                             FALSE,
++-                            mtu,
+++                            0, /*ignore */
++                             NULL,
++                             (GAsyncReadyCallback) net_link_down_ready,
++                             task);
++-- 
++2.34.1
++
+-- 
+2.34.1
+
