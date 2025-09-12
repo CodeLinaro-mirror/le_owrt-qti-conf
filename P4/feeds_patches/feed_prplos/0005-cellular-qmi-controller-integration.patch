@@ -1,0 +1,350 @@
+From d485e0f8c12b76ee68d0f5472af4f7dda4719559 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 3 Sep 2025 22:38:44 +0530
+Subject: [PATCH] cellular-qmi-controller-integration
+
+---
+ net_core/plugins/cellular-manager/Makefile    |   1 +
+ .../0003-qmi-controller-integration.patch     | 318 ++++++++++++++++++
+ 2 files changed, 319 insertions(+)
+ create mode 100644 net_core/plugins/cellular-manager/patches/0003-qmi-controller-integration.patch
+
+diff --git a/net_core/plugins/cellular-manager/Makefile b/net_core/plugins/cellular-manager/Makefile
+index f7b1baa..3a63f79 100644
+--- a/net_core/plugins/cellular-manager/Makefile
++++ b/net_core/plugins/cellular-manager/Makefile
+@@ -43,6 +43,7 @@ define Package/$(PKG_NAME)
+   DEPENDS += +mod-dmstats
+   DEPENDS += +mod-netmodel
+   DEPENDS += +modemmanager
++  DEPENDS += +libmod-cellular-qmi-qcmap
+   MENU:=1
+ endef
+ 
+diff --git a/net_core/plugins/cellular-manager/patches/0003-qmi-controller-integration.patch b/net_core/plugins/cellular-manager/patches/0003-qmi-controller-integration.patch
+new file mode 100644
+index 0000000..2bbd0d2
+--- /dev/null
++++ b/net_core/plugins/cellular-manager/patches/0003-qmi-controller-integration.patch
+@@ -0,0 +1,318 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 67f0ef4685680142a88513d1af8e25862aabdb47 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 3 Sep 2025 22:33:54 +0530
++Subject: [PATCH] qmi-controller-integration
++
++---
++ include_priv/cellular_events.h                |  4 ++
++ include_priv/cellular_priv.h                  |  1 +
++ makefile                                      |  4 ++
++ .../include_priv/mod-cellular-qmi.h           | 32 +++++++++
++ mod-cellular-qmi/src/makefile                 | 66 +++++++++++++++++++
++ mod-cellular-qmi/src/mod-cellular-qmi.c       | 52 +++++++++++++++
++ mod-cellular-qmi/src/mod-cellular-qmi_apis.c  | 39 +++++++++++
++ odl/cellular-manager_definition.odl           |  4 +-
++ src/dm_cellular_events.c                      | 33 ++++++++++
++ 9 files changed, 234 insertions(+), 1 deletion(-)
++ create mode 100644 mod-cellular-qmi/include_priv/mod-cellular-qmi.h
++ create mode 100644 mod-cellular-qmi/src/makefile
++ create mode 100644 mod-cellular-qmi/src/mod-cellular-qmi.c
++ create mode 100644 mod-cellular-qmi/src/mod-cellular-qmi_apis.c
++
++diff --git a/include_priv/cellular_events.h b/include_priv/cellular_events.h
++index 9222c09..bb204e7 100644
++--- a/include_priv/cellular_events.h
+++++ b/include_priv/cellular_events.h
++@@ -102,0 +103,4 @@ void _access_point_default_profile_changed(UNUSED const char* const sig_name,
+++void _cell_roaming_state_changed(const char* const sig_name,
+++                const amxc_var_t* const data,
+++                void* const priv);
+++
++diff --git a/include_priv/cellular_priv.h b/include_priv/cellular_priv.h
++index eadfe52..fcfde2d 100644
++--- a/include_priv/cellular_priv.h
+++++ b/include_priv/cellular_priv.h
++@@ -90,0 +91 @@ extern "C" {
+++#define MOD_QMI_CTRL "mod-cellular-qmi"
++diff --git a/makefile b/makefile
++index 328262f..2d81247 100644
++--- a/makefile
+++++ b/makefile
++@@ -24,0 +25 @@ all:
+++	$(MAKE) -C mod-cellular-qmi/src all
++@@ -28,0 +30 @@ clean:
+++	$(MAKE) -C mod-cellular-qmi/src clean
++@@ -34,0 +37 @@ install: all
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qmi.so $(DEST)/usr/lib/amx/modules/mod-cellular-qmi.so
++@@ -47,0 +51 @@ package: all
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qmi.so $(PKGDIR)/usr/lib/amx/modules/mod-cellular-qmi.so
++diff --git a/mod-cellular-qmi/include_priv/mod-cellular-qmi.h b/mod-cellular-qmi/include_priv/mod-cellular-qmi.h
++new file mode 100644
++index 0000000..729f29a
++--- /dev/null
+++++ b/mod-cellular-qmi/include_priv/mod-cellular-qmi.h
++@@ -0,0 +1,32 @@
+++/****************************************************************************
+++**
+++** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++** SPDX-License-Identifier: BSD-3-Clause-Clear
+++**
+++**
+++****************************************************************************/
+++#if !defined(__MOD_CELLULAR_QMI_H__)
+++#define __MOD_CELLULAR_QMI_H__
+++
+++#ifdef __cplusplus
+++extern "C" {
+++#endif
+++
+++#include <amxc/amxc.h>
+++#include <amxc/amxc_macros.h>
+++#include <amxp/amxp.h>
+++#include <amxm/amxm.h>
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include <cellular_priv.h>
+++
+++#define MOD_QMI_CTRL "mod-cellular-qmi"
+++
+++// Function declarations
+++int cell_roaming_set(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++
+++#ifdef __cplusplus
+++}
+++#endif
+++
+++#endif // __MOD_CELLULAR_QMI_H__
++diff --git a/mod-cellular-qmi/src/makefile b/mod-cellular-qmi/src/makefile
++new file mode 100644
++index 0000000..efeb6c1
++--- /dev/null
+++++ b/mod-cellular-qmi/src/makefile
++@@ -0,0 +1,66 @@
+++include ../../makefile.inc
+++
+++# Module name
+++MODULE = mod-cellular-qmi
+++
+++# Build destination directories
+++OBJDIR = ../../output/$(MACHINE)
+++
+++# TARGETS
+++TARGET_SO = $(OBJDIR)/$(MODULE).so
+++
+++# Directories
+++SRCDIR = .
+++INCDIR_PRIV = ../include_priv ../../include_priv
+++INCDIRS = $(INCDIR_PRIV) $(if $(STAGINGDIR), $(STAGINGDIR)/include $(STAGINGDIR)/usr/include $(STAGINGDIR)/usr/include/libmod-cellular-qmi-qcmap)
+++STAGING_LIBDIR = $(if $(STAGINGDIR), -L$(STAGINGDIR)/lib) $(if $(STAGINGDIR), -L$(STAGINGDIR)/usr/lib)
+++
+++# Source files
+++SOURCES = $(wildcard $(SRCDIR)/*.c)
+++OBJECTS = $(addprefix $(OBJDIR)/,$(notdir $(SOURCES:.c=.o)))
+++
+++# Compilation and linking flags
+++CFLAGS += -Werror -Wall -Wextra \
+++          -Wwrite-strings -Wredundant-decls \
+++          -Wformat=2 -Wshadow \
+++          -Wmissing-declarations -Wno-attributes \
+++          -Wno-format-nonliteral \
+++          -DSAHTRACES_ENABLED -DSAHTRACES_LEVEL=500 \
+++          -fPIC -g3 $(addprefix -I,$(INCDIRS))
+++
+++ifeq ($(CC_NAME),g++)
+++    CFLAGS += -std=c++2a
+++else
+++    CFLAGS += -Wstrict-prototypes -Wold-style-definition -Wnested-externs -std=gnu11
+++endif
+++
+++LDFLAGS += -shared -fPIC $(STAGING_LIBDIR) \
+++	-rdynamic \
+++	-lcellular_device_manager \
+++	-lmod_cellular_qmi_qcmap \
+++	-Wl,-rpath=/usr/lib \
+++	-ldsutils \
+++	-ldiag \
+++	-lqcmap_client \
+++	-llocation_client_api \
+++	-lstdc++ \
+++	-lamxc -lamxd -lamxb -lamxo -lamxm -lnetmodel -lamxrt -lamxm -lsahtrace -lamxp
+++# Targets
+++
+++all: $(TARGET_SO)
+++
+++$(TARGET_SO): $(OBJECTS)
+++	$(CC) -Wl,-soname,$(MODULE).so -o $@ $(OBJECTS) $(LDFLAGS)
+++
+++-include $(OBJECTS:.o=.d)
+++
+++$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)/
+++	$(CC) $(CFLAGS) -c -o $@ $<
+++	@$(CC) $(CFLAGS) -MM -MP -MT '$(@) $(@:.o=.d)' -MF $(@:.o=.d) $(<)
+++
+++$(OBJDIR)/:
+++	$(MKDIR) -p $@
+++
+++clean:
+++	rm -rf ../output/ ../$(MODULE)-*.* ../$(MODULE)_*.*
+++.PHONY: all clean
++diff --git a/mod-cellular-qmi/src/mod-cellular-qmi.c b/mod-cellular-qmi/src/mod-cellular-qmi.c
++new file mode 100644
++index 0000000..7c4c048
++--- /dev/null
+++++ b/mod-cellular-qmi/src/mod-cellular-qmi.c
++@@ -0,0 +1,52 @@
+++/****************************************************************************
+++**
+++** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++** SPDX-License-Identifier: BSD-3-Clause-Clear
+++**
+++**
+++****************************************************************************/
+++#include <stdio.h>
+++#include <stdlib.h>
+++#include <string.h>
+++
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++
+++#include "mod-cellular-qmi.h"
+++
+++#define ME "events"
+++
+++// Module initialization
+++static AMXM_CONSTRUCTOR qmi_module_start(void) {
+++    SAH_TRACEZ_IN(ME);
+++    SAH_TRACEZ_INFO(ME, "Entering qmi_module_start function ");
+++    int ret = 0;
+++    amxm_shared_object_t* so = amxm_so_get_current();
+++    amxm_module_t* mod = NULL;
+++
+++    if (!so) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to get current shared object");
+++        return -1;
+++    }
+++
+++    ret = amxm_module_register(&mod, so, MOD_QMI_CTRL);
+++    if (ret != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Fail to register module (ret = %d)\n", ret);
+++        return ret;
+++    }
+++    // Register roaming functions
+++    ret = amxm_module_add_function(mod, "set-roaming-enabled", cell_roaming_set);
+++    if (ret != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to register module (ret = %d)\n", ret);
+++        return ret;
+++    }
+++    SAH_TRACEZ_INFO(ME, "Cellular Device Module Roaming Support loaded");
+++    SAH_TRACEZ_OUT(ME);
+++    return ret;
+++}
+++
+++// Module cleanup
+++static AMXM_DESTRUCTOR qmi_module_stop(void) {
+++    SAH_TRACEZ_INFO(ME, "Cellular Device Module stopped");
+++    return 0;
+++}
++diff --git a/mod-cellular-qmi/src/mod-cellular-qmi_apis.c b/mod-cellular-qmi/src/mod-cellular-qmi_apis.c
++new file mode 100644
++index 0000000..d416d83
++--- /dev/null
+++++ b/mod-cellular-qmi/src/mod-cellular-qmi_apis.c
++@@ -0,0 +1,39 @@
+++/****************************************************************************
+++**
+++** Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++** SPDX-License-Identifier: BSD-3-Clause-Clear
+++**
+++**
+++****************************************************************************/
+++#include <stdio.h>
+++#include <stdlib.h>
+++#include <string.h>
+++
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include "mod-cellular-qmi.h"
+++
+++#include <cellular_hal_qmi.h>
+++
+++#define ME "events"
+++
+++int cell_roaming_set(UNUSED const char* function_name,
+++                    amxc_var_t* args,
+++                    UNUSED amxc_var_t* ret) {
+++
+++    SAH_TRACEZ_IN(ME);
+++    SAH_TRACEZ_INFO(ME, "Entering function cell_roaming_set");
+++    int rv = 0;
+++    bool roaming_enabled = GETP_BOOL(args, "enable");
+++
+++    when_null_trace(args, exit, ERROR, "No arguments provided");
+++    SAH_TRACEZ_INFO(ME, "Requested roaming state: %d",roaming_enabled);
+++
+++    int result = cellular_hal_prop_set_roaming(roaming_enabled);
+++    SAH_TRACEZ_INFO(ME, "Result = %d", result);
+++    SAH_TRACEZ_INFO(ME, "Set of Roaming Paramter is done");
+++exit:
+++    SAH_TRACEZ_INFO(ME, "End of function cell_roaming_set");
+++    SAH_TRACEZ_OUT(ME);
+++    return rv;
+++}
++diff --git a/odl/cellular-manager_definition.odl b/odl/cellular-manager_definition.odl
++index b33ae58..d394223 100644
++--- a/odl/cellular-manager_definition.odl
+++++ b/odl/cellular-manager_definition.odl
++@@ -17 +17 @@
++-        %protected %read-only csv_string SupportedControllers = "mod-cellular-libmm";
+++        %protected %read-only csv_string SupportedControllers = "mod-cellular-libmm, mod-cellular-qmi";
++@@ -658,0 +659,2 @@
+++    on event "dm:object-changed" call cell_roaming_state_changed
+++        filter 'path matches "Cellular\.$" && contains("parameters.RoamingEnabled")';
++diff --git a/src/dm_cellular_events.c b/src/dm_cellular_events.c
++index 7522620..db75255 100644
++--- a/src/dm_cellular_events.c
+++++ b/src/dm_cellular_events.c
++@@ -478,0 +479,33 @@ exit:
+++
+++void _cell_roaming_state_changed(UNUSED const char* const sig_name,
+++                                 const amxc_var_t* const data,
+++                                 UNUSED void* const priv){
+++    SAH_TRACEZ_IN(ME);
+++    SAH_TRACEZ_INFO(ME, "Entering function cell_roaming_state_changed.");
+++    int rv=0;
+++    bool enable = GETP_BOOL(data, "parameters.RoamingEnabled.to");
+++    SAH_TRACEZ_INFO(ME, "DM change happened, Requested value for RoamingEnabled = %d", enable);
+++    amxd_object_t* obj = amxd_dm_signal_get_object(cellular_get_dm(), data);
+++    when_null_trace(obj, exit, ERROR, "Unable to get the modified enable object.");
+++
+++    amxc_var_t ret;
+++    amxc_var_t ctrl_args;
+++
+++    amxc_var_init(&ctrl_args);
+++    amxc_var_init(&ret);
+++
+++    amxc_var_set_type(&ctrl_args, AMXC_VAR_ID_HTABLE);
+++    amxc_var_add_key(bool, &ctrl_args, "enable", enable);
+++
+++    SAH_TRACEZ_INFO(ME, "Entering the controller mod-cellular-qmi");
+++    rv = amxm_execute_function(MOD_QMI_CTRL, MOD_QMI_CTRL, "set-roaming-enabled", &ctrl_args, &ret);
+++    when_failed_trace(rv, exit, ERROR, "Failed to %s Roaming: %d",
+++    enable ? "enable" : "disable", rv);
+++
+++    SAH_TRACEZ_INFO(ME, "Successfully completed roaming state changed");
+++exit:
+++    amxc_var_clean(&ctrl_args);
+++    amxc_var_clean(&ret);
+++    SAH_TRACEZ_OUT(ME);
+++    return;
+++}
++-- 
++2.34.1
++
+-- 
+2.34.1
+
