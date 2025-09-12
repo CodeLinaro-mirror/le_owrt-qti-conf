@@ -1,0 +1,562 @@
+From 9159c83ef1fe02de12a6aa54b74d62ed4b993644 Mon Sep 17 00:00:00 2001
+From: Mohammed Sinan M <msinan@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 16:20:46 +0530
+Subject: [PATCH] vpnPassthrough changes in firewall
+Signed-off-by: Mohammed Sinan M <msinan@qti.qualcomm.com>
+
+---
+ .../0001-vpn-commit-in-firewall-module.patch  | 542 ++++++++++++++++++
+ 1 file changed, 542 insertions(+)
+ create mode 100644 qos_firewall/plugins/tr181-firewall/patches/0001-vpn-commit-in-firewall-module.patch
+
+diff --git a/qos_firewall/plugins/tr181-firewall/patches/0001-vpn-commit-in-firewall-module.patch b/qos_firewall/plugins/tr181-firewall/patches/0001-vpn-commit-in-firewall-module.patch
+new file mode 100644
+index 0000000..282be01
+--- /dev/null
++++ b/qos_firewall/plugins/tr181-firewall/patches/0001-vpn-commit-in-firewall-module.patch
+@@ -0,0 +1,542 @@
++This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++From 5e09a06f0f057e27246f7a87a5997c4fcaf0aaba Mon Sep 17 00:00:00 2001
++From: Mohammed Sinan M <msinan@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 16:13:48 +0530
++Subject: [PATCH] vpn commit in firewall module
++Signed-off-by: Mohammed Sinan M <msinan@qti.qualcomm.com>
++
++---
++ include_priv/firewall.h                       |   3 +-
++ .../firewall/dm_qcom_vpnPassthrough.h         |  24 ++++
++ makefile                                      |   3 +
++ .../include_priv/mod_qcom_vpn.h               |  23 ++++
++ mod-qcom-vpnPassthrough/src/makefile          |  48 ++++++++
++ mod-qcom-vpnPassthrough/src/mod_qcom_vpn.c    | 112 ++++++++++++++++++
++ .../feature/firewall_qcom_vpnPassthrough.odl  |  29 +++++
++ odl/firewall/firewall_definition.odl          |   5 +-
++ odl/tr181-firewall.odl                        |   4 +-
++ src/entrypoint.c                              |  36 +++++-
++ src/firewall/dm_qcom_vpnPassthrough.c         |  77 ++++++++++++
++ src/makefile                                  |   2 +-
++ 12 files changed, 360 insertions(+), 6 deletions(-)
++ create mode 100644 include_priv/firewall/dm_qcom_vpnPassthrough.h
++ create mode 100644 mod-qcom-vpnPassthrough/include_priv/mod_qcom_vpn.h
++ create mode 100644 mod-qcom-vpnPassthrough/src/makefile
++ create mode 100644 mod-qcom-vpnPassthrough/src/mod_qcom_vpn.c
++ create mode 100644 odl/firewall/feature/firewall_qcom_vpnPassthrough.odl
++ create mode 100644 src/firewall/dm_qcom_vpnPassthrough.c
++
++diff --git a/include_priv/firewall.h b/include_priv/firewall.h
++index fcb1f6d..7457e85 100644
++--- a/include_priv/firewall.h
+++++ b/include_priv/firewall.h
++@@ -81,7 +81,8 @@ int _fw_main(int reason,
++ void _app_start(const char* const sig_name,
++                 const amxc_var_t* const data,
++                 void* const priv);
++-
+++int load_controller(UNUSED amxo_parser_t* parser);
+++void unload_controller(void);
++ amxd_dm_t* PRIVATE fw_get_dm(void);
++ amxo_parser_t* PRIVATE fw_get_parser(void);
++ const char* fw_get_vendor_prefix(void);
++diff --git a/include_priv/firewall/dm_qcom_vpnPassthrough.h b/include_priv/firewall/dm_qcom_vpnPassthrough.h
++new file mode 100644
++index 0000000..fe70c4d
++--- /dev/null
+++++ b/include_priv/firewall/dm_qcom_vpnPassthrough.h
++@@ -0,0 +1,24 @@
+++/**************************************
+++Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++SPDX-License-Identifier: BSD-3-Clause-Clear
+++**************************************/
+++#include <amxc/amxc.h>
+++#include <amxp/amxp.h>
+++#include <amxc/amxc_macros.h>
+++#include <amxd/amxd_object.h>
+++#include <amxm/amxm.h>
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include "chains.h"
+++#include "init_cleanup.h"
+++#include "firewall.h"
+++
+++#ifndef UNUSED
+++#define UNUSED  __attribute__((unused))
+++#endif
+++
+++#define QCOM_FIREWALL "Firewall."
+++// Event handlers
+++void _qcomVPNPassthrough_changed(const char* const sig_name,
+++                              const amxc_var_t* const data,
+++                              void* const priv);
++diff --git a/makefile b/makefile
++index 0068965..47d9d74 100644
++--- a/makefile
+++++ b/makefile
++@@ -21,6 +21,7 @@ endef
++ # targets
++ all:
++ 	$(MAKE) -C src all
+++	$(MAKE) -C mod-qcom-vpnPassthrough/src all
++ 	$(MAKE) -C odl all
++ 
++ clean:
++@@ -30,6 +31,7 @@ clean:
++ 
++ install: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(DEST)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-qcom-vpnPassthrough.so $(DEST)/usr/lib/amx/$(COMPONENT)/modules/mod-qcom-vpnPassthrough.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_caps.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_caps.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++@@ -108,6 +110,7 @@ endif
++ 
++ package: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-qcom-vpnPassthrough.so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/modules/mod-qcom-vpnPassthrough.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_caps.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_caps.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++diff --git a/mod-qcom-vpnPassthrough/include_priv/mod_qcom_vpn.h b/mod-qcom-vpnPassthrough/include_priv/mod_qcom_vpn.h
++new file mode 100644
++index 0000000..20b80a0
++--- /dev/null
+++++ b/mod-qcom-vpnPassthrough/include_priv/mod_qcom_vpn.h
++@@ -0,0 +1,23 @@
+++/*************************************
+++Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++SPDX-License-Identifier: BSD-3-Clause-Clear
+++**************************************/
+++#include <amxc/amxc_macros.h>
+++#include <amxc/amxc.h>
+++#include <amxm/amxm.h>
+++#include <string.h>
+++#include <sys/sysinfo.h>
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include <dlfcn.h>
+++
+++#define VPN_LIB_PATH "/usr/lib/mod-qcom-vpn.so"
+++#define SUCCESS 0
+++#define FAILURE -1
+++
+++int enable_l2tp_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++int disable_l2tp_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++int enable_ipsec_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++int disable_ipsec_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++int enable_pptp_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++int disable_pptp_passthrough(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
++diff --git a/mod-qcom-vpnPassthrough/src/makefile b/mod-qcom-vpnPassthrough/src/makefile
++new file mode 100644
++index 0000000..8560969
++--- /dev/null
+++++ b/mod-qcom-vpnPassthrough/src/makefile
++@@ -0,0 +1,48 @@
+++include ../../makefile.inc
+++# build destination directories
+++OBJDIR = ../../output/$(MACHINE)
+++# TARGETS
+++MODULE = mod-qcom-vpnPassthrough
+++TARGET_SO = $(OBJDIR)/$(MODULE).so
+++# source directories
+++SRCDIR = .
+++INCDIR_PRIV = ../include_priv
+++INCDIRS = $(INCDIR_PRIV) $(if $(STAGINGDIR), $(STAGINGDIR)/include $(STAGINGDIR)/usr/include)
+++STAGING_LIBDIR = $(if $(STAGINGDIR), -L$(STAGINGDIR)/lib) $(if $(STAGINGDIR), -L$(STAGINGDIR)/usr/lib)
+++SOURCES = $(wildcard $(SRCDIR)/*.c)
+++OBJECTS = $(addprefix $(OBJDIR)/,$(notdir $(SOURCES:.c=.o)))
+++# compilation and linking flags
+++CFLAGS += -Werror -Wall -Wextra \
+++		-Wformat=2 -Wshadow \
+++		-Wwrite-strings -Wredundant-decls \
+++		-Wmissing-declarations -Wno-attributes \
+++		-Wno-format-nonliteral \
+++		-DSAHTRACES_ENABLED -DSAHTRACES_LEVEL=500 \
+++		-fPIC -g3 $(addprefix -I ,$(INCDIRS))
+++
+++ifeq ($(CC_NAME),g++)
+++	CFLAGS += -std=c++2a
+++else
+++	CFLAGS += -Wstrict-prototypes -Wold-style-definition -Wnested-externs -std=gnu11
+++endif
+++
+++LDFLAGS += -shared -fPIC $(STAGING_LIBDIR) -lamxc -lamxm -lsahtrace
+++# targets
+++all: $(TARGET_SO)
+++
+++$(TARGET_SO): $(OBJECTS)
+++	$(CC) -Wl,-soname,$(MODULE).so -o $@ $(OBJECTS) $(LDFLAGS)
+++
+++-include $(OBJECTS:.o=.d)
+++
+++$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)/
+++	$(CC) $(CFLAGS) -c -o $@ $<
+++	@$(CC) $(CFLAGS) -MM -MP -MT '$(@) $(@:.o=.d)' -MF $(@:.o=.d) $(<)
+++
+++$(OBJDIR)/:
+++	$(MKDIR) -p $@
+++
+++clean:
+++	rm -rf ../output/ ../$(MODULE)-*.* ../$(MODULE)_*.*
+++
+++.PHONY: all clean
++diff --git a/mod-qcom-vpnPassthrough/src/mod_qcom_vpn.c b/mod-qcom-vpnPassthrough/src/mod_qcom_vpn.c
++new file mode 100644
++index 0000000..8539384
++--- /dev/null
+++++ b/mod-qcom-vpnPassthrough/src/mod_qcom_vpn.c
++@@ -0,0 +1,112 @@
+++/*************************************
+++  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++  SPDX-License-Identifier: BSD-3-Clause-Clear
+++ **************************************/
+++#include "mod_qcom_vpn.h"
+++
+++#define ME "VPNPassthrough"
+++
+++struct _mod_vpn {
+++    amxm_shared_object_t* so;
+++    void* vpn_handler;
+++};
+++static struct _mod_vpn vpn;
+++/* To loads and calls the L2TP enable function from the shared library.*/
+++int enable_l2tp_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_INFO(ME,"L2TP enabled");
+++    void (*enable_l2tp)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "enable_l2tp_passthrough_execute");
+++    if (!enable_l2tp) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find L2TP enable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    enable_l2tp();
+++    return SUCCESS;
+++}
+++/* To loads and calls the L2TP disable function from the shared library.*/
+++int disable_l2tp_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_WARNING(ME,"L2TP disabled");
+++    void (*disable_l2tp)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "disable_l2tp_passthrough_execute");
+++    if (!disable_l2tp) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find L2TP disable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    disable_l2tp();
+++    return SUCCESS;
+++}
+++/* To loads and calls the IPsec enable function from the shared library.*/
+++int enable_ipsec_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_INFO(ME,"ipsec enabled");
+++    void (*enable_ipsec)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "enable_ipsec_passthrough_execute");
+++    if (!enable_ipsec) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find ipsec enable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    enable_ipsec();
+++    return SUCCESS;
+++}
+++/* To loads and calls the IPsec disable function from the shared library.*/
+++int disable_ipsec_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_WARNING(ME,"ipsec disabled");
+++    void (*disable_ipsec)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "disable_ipsec_passthrough_execute");
+++    if (!disable_ipsec) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find ipsec disable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    disable_ipsec();
+++    return SUCCESS;
+++}
+++/* To loads and calls the PPTP enable function from the shared library.*/
+++int enable_pptp_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_INFO(ME,"PPTP enabled");
+++    void (*enable_pptp)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "enable_pptp_passthrough_execute");
+++    if (!enable_pptp) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find pptp enable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    enable_pptp();
+++    return SUCCESS;
+++}
+++/* To loads and calls the PPTP disable function from the shared library.*/
+++int disable_pptp_passthrough(UNUSED const char* function_name, UNUSED amxc_var_t* args, UNUSED amxc_var_t* ret) {
+++    SAH_TRACEZ_WARNING(ME,"pptp disabled");
+++    void (*disable_pptp)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "disable_pptp_passthrough_execute");
+++    if (!disable_pptp) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to find pptp disable function: %s", dlerror());
+++        return FAILURE;
+++    }
+++    disable_pptp();
+++    return SUCCESS;
+++}
+++/* Register the intermeadiate module for calling the generic .so file */
+++static AMXM_CONSTRUCTOR vpn_module_start(void) {
+++    amxm_module_t* mod = NULL;
+++    vpn.so = amxm_so_get_current();
+++    amxm_module_register(&mod, vpn.so, "mod-qcom-vpnPassthrough");
+++    amxm_module_add_function(mod, "enable-l2tp-passthrough", enable_l2tp_passthrough);
+++    amxm_module_add_function(mod, "disable-l2tp-passthrough", disable_l2tp_passthrough);
+++    amxm_module_add_function(mod, "enable-ipsec-passthrough", enable_ipsec_passthrough);
+++    amxm_module_add_function(mod, "disable-ipsec-passthrough", disable_ipsec_passthrough);
+++    amxm_module_add_function(mod, "enable-pptp-passthrough", enable_pptp_passthrough);
+++    amxm_module_add_function(mod, "disable-pptp-passthrough", disable_pptp_passthrough);
+++    vpn.vpn_handler = dlopen(VPN_LIB_PATH, RTLD_LAZY);
+++    if (!vpn.vpn_handler) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to load DL handler: %s\n", dlerror());
+++        return FAILURE;
+++    }
+++    void (*set_chain)(void) = (void (*)(void))dlsym(vpn.vpn_handler, "setup_vpn_chains");
+++    if (!set_chain) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to set vpn_passthrough chain: %s", dlerror());
+++        return FAILURE;
+++    }
+++    set_chain();
+++    SAH_TRACEZ_INFO(ME," VPN Passthrough controller initialized");
+++    return SUCCESS;
+++}
+++static AMXM_DESTRUCTOR vpn_module_stop(void) {
+++    if(vpn.vpn_handler){
+++        dlclose(vpn.vpn_handler);
+++        vpn.vpn_handler = NULL;
+++    }
+++    SAH_TRACEZ_INFO(ME," VPN Passthrough controller stopped");
+++    return SUCCESS;
+++}
++diff --git a/odl/firewall/feature/firewall_qcom_vpnPassthrough.odl b/odl/firewall/feature/firewall_qcom_vpnPassthrough.odl
++new file mode 100644
++index 0000000..b314416
++--- /dev/null
+++++ b/odl/firewall/feature/firewall_qcom_vpnPassthrough.odl
++@@ -0,0 +1,29 @@
+++/*************************************
+++Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++SPDX-License-Identifier: BSD-3-Clause-Clear
+++**************************************/
+++%define {
+++    select Firewall {
+++        %protected %read-only string Controller = "mod-qcom-vpnPassthrough";
+++        %persistent bool X_QCOM_L2TPPassthrough {
+++            default true;
+++            userflags %usersetting;
+++        }
+++        %persistent bool X_QCOM_IPSecPassthrough {
+++            default true;
+++            userflags %usersetting;
+++        }
+++        %persistent bool X_QCOM_PPTPPassthrough {
+++            default true;
+++            userflags %usersetting;
+++        }
+++    }
+++}
+++%populate {
+++    on event "dm:object-changed" call qcomVPNPassthrough_changed
+++        filter 'path == "Firewall." && (
+++                   (contains("parameters.X_QCOM_L2TPPassthrough")) ||
+++                   (contains("parameters.X_QCOM_IPSecPassthrough")) ||
+++                   (contains("parameters.X_QCOM_PPTPPassthrough"))
+++               )';
+++}
++diff --git a/odl/firewall/firewall_definition.odl b/odl/firewall/firewall_definition.odl
++index 9f7a9cb..562dc37 100644
++--- a/odl/firewall/firewall_definition.odl
+++++ b/odl/firewall/firewall_definition.odl
++@@ -5,7 +5,7 @@
++      */
++     %persistent object Firewall {
++         on action destroy call firewall_cleanup;
++-
+++        %protected %read-only csv_string SupportedControllers = "mod-qcom-vpnPassthrough";
++         /**
++          * Enables or disables the Firewall.
++          * @version 1.0
++@@ -780,4 +780,5 @@
++ ?include "dmz_definition.odl" : "feature/dmz_definition.odl";
++ ?include "pinhole_definition.odl" : "feature/pinhole_definition.odl";
++ ?include "connectiontracking_definition.odl" : "feature/connectiontracking_definition.odl";
++-?include "ipset_definition.odl" : "feature/ipset_definition.odl";
++\ No newline at end of file
+++?include "ipset_definition.odl" : "feature/ipset_definition.odl";
+++?include "firewall_qcom_vpnPassthrough.odl" : "feature/firewall_qcom_vpnPassthrough.odl";
++\ No newline at end of file
++diff --git a/odl/tr181-firewall.odl b/odl/tr181-firewall.odl
++index 9333b04..0365dd0 100644
++--- a/odl/tr181-firewall.odl
+++++ b/odl/tr181-firewall.odl
++@@ -40,7 +40,9 @@
++         fw-isol = "${default_trace_zone_level}",
++         ipset = "${default_trace_zone_level}"
++     };
++-
+++    tr181-firewall = {
+++        mod-dir = "/usr/lib/amx/${name}/modules"
+++    };
++     pcm_svc_config = {
++         "Objects" = "Firewall,NAT",
++         "BackupFiles" = "tr181-firewall,tr181-firewall_NAT"
++diff --git a/src/entrypoint.c b/src/entrypoint.c
++index 3faf678..f22534b 100644
++--- a/src/entrypoint.c
+++++ b/src/entrypoint.c
++@@ -67,6 +67,7 @@
++ #include "devices_query.h"
++ #endif
++ #include "profiling/profiling.h"
+++#include "firewall/dm_qcom_vpnPassthrough.h"
++ #include <netmodel/client.h>    // for netmodel_initialize
++ #include <schedules/schedule.h> // for schedule_initialize
++ #include <ipset/ipset.h>        // for ipset_initialize
++@@ -85,7 +86,38 @@ typedef struct {
++ } fw_app_t;
++ 
++ static fw_app_t app;
++-
+++amxm_shared_object_t* qcom_so = NULL;
+++//To load the controller module
+++int load_controller(UNUSED amxo_parser_t* parser) {
+++    int rv = 0;
+++    amxd_object_t* qcom_vpn = amxd_dm_findf(fw_get_dm(), "%s", QCOM_FIREWALL);
+++    amxc_var_t controllers;
+++    amxc_string_t mod_path;
+++    // Get the SupportedController value and convert to list
+++    const amxc_var_t* supported_controllers = amxd_object_get_param_value(qcom_vpn, "SupportedControllers");
+++    amxc_var_init(&controllers);
+++    amxc_string_init(&mod_path, 0);
+++    amxc_var_convert(&controllers, supported_controllers, AMXC_VAR_ID_LIST);
+++    const char* module_dir = GETP_CHAR(&parser->config, "tr181-firewall.mod-dir");
+++    when_str_empty_trace(module_dir, exit, ERROR, "Module directory not configured");
+++    // Iterate through the supported controllers list
+++    amxc_var_for_each(controller, &controllers) {
+++        const char* name = GET_CHAR(controller, NULL);
+++        amxc_string_setf(&mod_path, "%s/%s.so", module_dir, name);
+++        SAH_TRACEZ_INFO(ME, "Loading controller '%s' (file = %s)", name, amxc_string_get(&mod_path, 0));
+++        rv = amxm_so_open(&qcom_so, name, amxc_string_get(&mod_path, 0));
+++        SAH_TRACEZ_INFO(ME, "Loading controller '%s' %s", name, rv ? "failed" : "successful");
+++        when_failed_trace(rv, exit, WARNING, "Not continuing with loading %s modules", name);
+++    }
+++exit:
+++    amxc_string_clean(&mod_path);
+++    amxc_var_clean(&controllers);
+++    return rv;
+++}
+++// Unloads the supported controllers
+++void unload_controller(void) {
+++    amxm_so_close(&qcom_so);
+++}
++ static void fw_init(amxd_dm_t* dm,
++                     amxo_parser_t* parser) {
++     app.dm = dm;
++@@ -94,6 +126,7 @@ static void fw_init(amxd_dm_t* dm,
++     schedule_initialize();
++     porttrigger_nfqueue_start();
++     ipset_initialize();
+++    load_controller(parser);
++ }
++ 
++ static void fw_exit(void) {
++@@ -105,6 +138,7 @@ static void fw_exit(void) {
++     netmodel_cleanup();
++     ifsettings_cleanup();
++     ipset_cleanup();
+++    unload_controller();
++ #ifdef PORTMAPPING_CONNTRACK_INACTIVITY_CHECK
++     ct_cleanup();
++ #endif
++diff --git a/src/firewall/dm_qcom_vpnPassthrough.c b/src/firewall/dm_qcom_vpnPassthrough.c
++new file mode 100644
++index 0000000..79b2dd8
++--- /dev/null
+++++ b/src/firewall/dm_qcom_vpnPassthrough.c
++@@ -0,0 +1,77 @@
+++/*************************************
+++ Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+++ SPDX-License-Identifier: BSD-3-Clause-Clear
+++**************************************/
+++#include "firewall/dm_qcom_vpnPassthrough.h"
+++
+++#define ME "VPNPassthrough"
+++
+++/*This function manages the VPN passthrough configuration in the firewall settings.
+++ It responds to changes in the L2TP, IPSec, and PPTP passthrough parameters and
+++ invokes the appropriate module functions to enable or disable these protocols.*/
+++void _qcomVPNPassthrough_changed(UNUSED const char* const sig_name, const amxc_var_t* const event_data, UNUSED void* const priv) {
+++    amxc_var_t* params = GET_ARG(event_data, "parameters");
+++    amxc_var_t* var = NULL;
+++    bool l2tp_enable = true;
+++    bool ipsec_enable = true;
+++    bool pptp_enable = true;
+++    amxd_object_t* qcom_vpn = amxd_dm_findf(fw_get_dm(), "%s", QCOM_FIREWALL);
+++    char* controller = NULL;
+++    amxc_var_t ret;
+++    amxc_var_t data;
+++    amxc_var_init(&data);
+++    amxc_var_init(&ret);
+++    int r = 0;
+++    if (qcom_vpn == NULL) {
+++    SAH_TRACEZ_ERROR(ME, "Failed to find QCOM_FIREWALL object.");
+++    goto exit;
+++    }
+++    controller = amxd_object_get_value(cstring_t, qcom_vpn, "Controller", NULL);
+++    if (controller == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to get controller value");
+++        goto exit;
+++    }
+++    var = GET_ARG(params, "X_QCOM_L2TPPassthrough");
+++    if (var != NULL) {
+++        l2tp_enable = GET_BOOL(var, "to");
+++        // L2TP Passthrough
+++        if (l2tp_enable) {
+++            r = amxm_execute_function(controller, controller, "enable-l2tp-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the l2tp enable module returns to : %d", r);
+++        } else {
+++            r = amxm_execute_function(controller, controller, "disable-l2tp-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the l2tp disable module returns to : %d", r);
+++        }
+++    }
+++    var = GET_ARG(params, "X_QCOM_IPSecPassthrough");
+++    if (var != NULL) {
+++        ipsec_enable = GET_BOOL(var, "to");
+++        // IPSec Passthrough
+++        if (ipsec_enable) {
+++            r = amxm_execute_function(controller, controller, "enable-ipsec-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the ipsec enable module returns to : %d", r);
+++        } else {
+++            r = amxm_execute_function(controller, controller, "disable-ipsec-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the ipsec disable module returns to : %d", r);
+++        }
+++    }
+++    var = GET_ARG(params, "X_QCOM_PPTPPassthrough");
+++    if (var != NULL) {
+++        pptp_enable = GET_BOOL(var, "to");
+++        // PPTP Passthrough
+++        if (pptp_enable) {
+++            r = amxm_execute_function(controller, controller, "enable-pptp-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the pptp enable module returns to : %d", r);
+++        } else {
+++            r = amxm_execute_function(controller, controller, "disable-pptp-passthrough", &data, &ret);
+++            when_failed_trace(r, exit, ERROR, "failed to load the pptp disable module returns to : %d", r);
+++        }
+++    }
+++exit:
+++    if (controller != NULL) {
+++        free(controller);
+++    }
+++    amxc_var_clean(&data);
+++    amxc_var_clean(&ret);
+++    return;
+++}
++diff --git a/src/makefile b/src/makefile
++index 6fa2be2..7caa102 100644
++--- a/src/makefile
+++++ b/src/makefile
++@@ -65,7 +65,7 @@ else
++ endif
++ 
++ LDFLAGS += $(STAGING_LIBDIR) -shared -fPIC
++-LDFLAGS += -lamxc -lamxd -lamxo -lamxb -lamxp -lsahtrace -lfwrules -lfwinterface -lnetmodel -lmnl -lnetfilter_queue -lipat -ltr181-schedules -lipset
+++LDFLAGS += -lamxc -lamxd -lamxo -lamxb -lamxm -lamxp -lsahtrace -lfwrules -lfwinterface -lnetmodel -lmnl -lnetfilter_queue -lipat -ltr181-schedules -lipset
++ ifeq ($(CONFIG_SAH_AMX_TR181_FIREWALL_WITH_GMAP),y)
++ 	LDFLAGS += -lgmap-client
++ endif
++-- 
++2.34.1
++
+-- 
+2.34.1
+
