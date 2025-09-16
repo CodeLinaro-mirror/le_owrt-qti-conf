@@ -394,3 +394,5 @@ if args.target == 'sdx35':
             build_kw(args.profile)
         else:
             build(args.profile)
+    if args.bin_ddm == 'true':
+        generate_bin_ddm(args.profile)
