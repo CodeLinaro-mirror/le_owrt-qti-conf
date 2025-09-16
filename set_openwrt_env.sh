@@ -468,7 +468,7 @@ function configure(){
 		TARGET=sdxpinn-prpl
 	else
 		if [ "${1}" == "sdx75" ]; then
-			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ] || [ "${2}" = "iot" ]; then
 				TARGET=sdxpinn
 			fi
 			if [ "${2}" = "cpe" ]; then
