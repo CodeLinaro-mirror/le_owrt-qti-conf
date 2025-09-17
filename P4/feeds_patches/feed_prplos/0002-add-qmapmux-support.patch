@@ -1,0 +1,387 @@
+From 9db40c1a0c1b14f3b6e81782bf8cc08d3ca48b61 Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Thu, 21 Aug 2025 14:52:00 +0530
+Subject: [PATCH] add qmapux support
+
+---
+ .../patches/0001-sdx-config.patch             |  18 ++
+ .../0001-get-bearer-inteface-Name.patch       |  63 ++++
+ .../patches/0001-qmapmux-support.patch        | 271 ++++++++++++++++++
+ 3 files changed, 352 insertions(+)
+ create mode 100644 board_configuration/utilities/odl-generator/patches/0001-sdx-config.patch
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0001-get-bearer-inteface-Name.patch
+ create mode 100644 net_core/plugins/cellular-manager/patches/0001-qmapmux-support.patch
+
+diff --git a/board_configuration/utilities/odl-generator/patches/0001-sdx-config.patch b/board_configuration/utilities/odl-generator/patches/0001-sdx-config.patch
+new file mode 100644
+index 0000000..e93e374
+--- /dev/null
++++ b/board_configuration/utilities/odl-generator/patches/0001-sdx-config.patch
+@@ -0,0 +1,18 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++diff --git a/files/netlayout_from_uci.sh b/files/netlayout_from_uci.sh
++index 1b7e73d..18dc88f 100755
++--- a/files/netlayout_from_uci.sh
+++++ b/files/netlayout_from_uci.sh
++@@ -75,7 +75,7 @@ netlayout_add_wwan_itf()
++ 			break
++ 		fi
++ 	done
++-	[ -z "$itf_name" ] && itf_name=wwan0
+++	[ -z "$itf_name" ] && itf_name=rmnet_ipa0
++ 
++ 	local itf_alias=$(itf_name_to_dt_alias "$itf_name")
++ 
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0001-get-bearer-inteface-Name.patch b/net_core/mods/mod-cellular-libmm/patches/0001-get-bearer-inteface-Name.patch
+new file mode 100644
+index 0000000..ff7e9a3
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0001-get-bearer-inteface-Name.patch
+@@ -0,0 +1,63 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index fe144b9..c6d8252 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -77,6 +77,7 @@
++ #define CHECK_MANAGER_OWNER_PERIOD  60   /* seconds */
++ #define MODEM_RECONNECT_PERIOD      30   /* seconds */
++ #define ICCID_MIN_LENGTH 6
+++#define DEFAULT_CELLULAR_INTERFACE "rmnet_ipa0"
++ 
++ static GMutex libmm_lock;
++ static GDBusConnection* libmm_connection = NULL;
++@@ -200,6 +201,7 @@ error:
++     amxc_llist_for_each(it, libmm_cell_ifaces) {
++         cell_iface = amxc_container_of(it, libmm_cell_iface_t, it);
++ 
+++        strncpy(cell_iface->netdev_name, DEFAULT_CELLULAR_INTERFACE, sizeof(cell_iface->netdev_name));
++         detach_modem_from_cell_iface(cell_iface);
++ 
++         /* Instruct cellular manager to update Cellular.Interface object state */
++@@ -1397,6 +1399,7 @@ int libmm_iface_retrieve(UNUSED const char* function_name,
++     amxc_var_add_key(uint32_t, ret, "UpstreamMaxBitRate", cell_iface->upstream_max_bitrate);
++     amxc_var_add_key(uint32_t, ret, "DownstreamMaxBitRate", cell_iface->downstream_max_bitrate);
++ 
+++    amxc_var_add_key(cstring_t, ret, "Name", cell_iface->netdev_name);
++     retval = 0;
++ 
++ exit:
++@@ -1547,6 +1550,12 @@ int libmm_bearer_retrieve(UNUSED const char* function_name,
++             /* Instruct cellular manager to update Cellular.Interface object state */
++             libmm_dm_read_interface_last_change(cell_iface);
++         }
+++        const char *netdev_name = mm_bearer_get_interface(cell_iface->bearer_object);
+++        if(netdev_name == NULL) {
+++            SAH_TRACEZ_ERROR(ME, "mm_bearer_get_interface returned null");
+++        } else {
+++            strncpy(cell_iface->netdev_name, netdev_name, sizeof(cell_iface->netdev_name));
+++        }
++     }
++ 
++     amxc_var_set_type(ret, AMXC_VAR_ID_HTABLE);
++@@ -1567,6 +1576,7 @@ int libmm_bearer_retrieve(UNUSED const char* function_name,
++     amxc_var_add_key(cstring_t, ipv6_addr, "NextHop", cell_iface->bearer.ipv6.gateway);
++     amxc_var_add_key(cstring_t, ipv6_addr, "Prefix", cell_iface->bearer.ipv6.prefix);
++     amxc_var_add_key(uint32_t, ipv6_addr, "MTU", cell_iface->bearer.ipv6.mtu);
+++    amxc_var_add_key(cstring_t, ret, "Name", cell_iface->netdev_name);
++ 
++     retval = 0;
++ 
++@@ -1655,6 +1665,8 @@ libmm_modem_state_changed (MMModem* modem,
++     cell_iface = find_libmm_cell_iface_by_name(modem_path);
++     when_null(cell_iface, exit);
++ 
+++    strncpy(cell_iface->netdev_name, DEFAULT_CELLULAR_INTERFACE, sizeof(cell_iface->netdev_name));
+++    SAH_TRACEZ_NOTICE(ME, "netdev_name reset to %s", DEFAULT_CELLULAR_INTERFACE);
++     /* Attempt to reconnect bearer only when interface is enabled and bearer config is supported */
++     when_true(!cell_iface->enable ||
++               cell_iface->bearer_properties == NULL ||
+diff --git a/net_core/plugins/cellular-manager/patches/0001-qmapmux-support.patch b/net_core/plugins/cellular-manager/patches/0001-qmapmux-support.patch
+new file mode 100644
+index 0000000..b4f0754
+--- /dev/null
++++ b/net_core/plugins/cellular-manager/patches/0001-qmapmux-support.patch
+@@ -0,0 +1,271 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++diff --git a/include_priv/cellular_priv.h b/include_priv/cellular_priv.h
++index f478862..eadfe52 100644
++--- a/include_priv/cellular_priv.h
+++++ b/include_priv/cellular_priv.h
++@@ -106,6 +106,7 @@ typedef struct _cell_iface {
++     amxb_subscription_t* netdev_new_link_subscription; // subscription to be informed of new matching links, added in NetDev
++     uint32_t last_change;                              // time definition for time of last status change
++     amxp_timer_t* update_timer;                        // 1 sec timer that is enabled each time interface status needs DM update
+++    amxb_subscription_t* nm_name_subscription;         // subscription to be informed of name change in netmodel intf
++ } cell_iface_t;
++ 
++ int _cellular_main(int reason, amxd_dm_t* dm, amxo_parser_t* parser);
++diff --git a/include_priv/cellular_soc_utils.h b/include_priv/cellular_soc_utils.h
++index af20268..569f868 100644
++--- a/include_priv/cellular_soc_utils.h
+++++ b/include_priv/cellular_soc_utils.h
++@@ -77,6 +77,7 @@ int set_cell_iface_usim(cell_iface_t* cell_iface, const char* pincheck, const ch
++ 
++ void cell_iface_fill_trans(cell_iface_t* cell_iface, amxd_trans_t* trans);
++ 
+++int get_corresponding_nm_intf(const char* intf_obj_path, amxc_string_t* nm_intf_path );
++ #ifdef __cplusplus
++ }
++ #endif
++diff --git a/odl/cellular-manager.odl b/odl/cellular-manager.odl
++index e6a7c47..934a51c 100644
++--- a/odl/cellular-manager.odl
+++++ b/odl/cellular-manager.odl
++@@ -109,7 +109,7 @@
++     NetModel = "nm_cellular";
++     nm_cellular = {
++         InstancePath = "Cellular.Interface.",
++-        Tags = "cellular netdev",
+++        Tags = "cellular",
++         Prefix = "cellularIntf-"
++     };
++ }
++diff --git a/odl/cellular-manager_definition.odl b/odl/cellular-manager_definition.odl
++index cc66e79..5b32472 100644
++--- a/odl/cellular-manager_definition.odl
+++++ b/odl/cellular-manager_definition.odl
++@@ -99,10 +99,11 @@
++ 
++             /**
++              * The textual name of the interface as assigned by the CPE.
+++             * Default value rmnet_ipa0 is required for the platform as it overrides wwan0 on bootup.
++              *
++              * @version V1.0
++              */
++-            %read-only %persistent %unique %key string Name {
+++            %read-only %unique string Name = "rmnet_ipa0" {
++                 on action validate call check_maximum_length 64;
++             }
++ 
++diff --git a/src/cellular_soc_utils.c b/src/cellular_soc_utils.c
++index 13d2bcd..c66a2cb 100644
++--- a/src/cellular_soc_utils.c
+++++ b/src/cellular_soc_utils.c
++@@ -73,11 +73,13 @@
++ #include "cellular_soc_utils.h"
++ 
++ #define ME "utils"
+++#define QMAPMUX "qmapmux"
++ 
++ /**
++  * Definition for the Cellular interface read-only parameters
++  */
++ static const char* CellIfParams[] = {
+++    "Name",
++     "InternalName",
++     "Status",
++     "IMEI",
++@@ -391,6 +393,148 @@ exit:
++     return rv;
++ }
++ 
+++/**
+++ * @brief Updates a flag on a NetModel interface.
+++ *
+++ * This function sets or clears a flag on a specified NetModel interface.
+++ *
+++ * @param[in] netmodel_intf  The name of the NetModel interface to update.
+++ * @param[in] flag           The name of the flag to set or clear.
+++ * @param[in] set            A boolean indicating whether to set (true) or clear (false) the flag.
+++ *
+++ * @return None
+++ */
+++static void update_flag(const char* netmodel_intf, const char* flag, bool set) {
+++    amxc_var_t args;
+++    amxc_var_t ret;
+++    const char* function = set ? "setFlag" : "clearFlag";
+++
+++    amxc_var_init(&args);
+++    amxc_var_init(&ret);
+++
+++    amxc_var_set_type(&args, AMXC_VAR_ID_HTABLE);
+++    amxc_var_add_key(cstring_t, &args, "flag", flag);
+++
+++    if(AMXB_STATUS_OK != amxb_call(netmodel_get_amxb_bus(), netmodel_intf, function, &args, &ret, 5)) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to call %s%s(flag='%s')", netmodel_intf, function, flag);
+++        goto exit;
+++    }
+++
+++exit:
+++    amxc_var_clean(&args);
+++    amxc_var_clean(&ret);
+++}
+++/**
+++ * @brief Retrieves the corresponding NetModel interface for a given interface object path.
+++ *
+++ * This function searches for a NetModel interface that matches the specified interface object path
+++ * and returns its path in the output parameter.
+++ *
+++ * @param[in]  intf_obj_path  The interface object path to search for.
+++ * @param[out] nm_intf_path   A pointer to an amxc_string_t that will store the found NetModel interface path.
+++ *
+++ * @return int 0 on success, -1 on failure.
+++ */
+++int get_corresponding_nm_intf(const char* intf_obj_path, amxc_string_t* nm_intf_path ) {
+++    int rv = -1;
+++    amxc_string_t search_path;
+++    amxc_var_t nm_intf;
+++
+++    when_null_trace(nm_intf_path, exit, ERROR, "nm_intf_path is NULL");
+++
+++    amxc_var_init(&nm_intf);
+++    amxc_string_init(&search_path, 0);
+++    amxc_string_init(nm_intf_path, 0);
+++
+++    amxc_string_setf(&search_path, "NetModel.Intf.['Device.%s' in InterfacePath].", intf_obj_path);
+++
+++    rv = amxb_get(netmodel_get_amxb_bus(), amxc_string_get(&search_path, 0), 0, &nm_intf, 5);
+++    when_failed_trace(rv, exit, ERROR, "Failed to search for Netmodel interface: search path: %s", amxc_string_get(&search_path, 0));
+++
+++    SAH_TRACEZ_INFO(ME, "Found '%s' ", amxc_var_key(GETP_ARG(&nm_intf, "0.0")));
+++    when_true_trace(str_empty(amxc_var_key(GETP_ARG(&nm_intf, "0.0"))), exit, ERROR, "Netmodel interface not found");
+++    amxc_string_setf(nm_intf_path, "%s", amxc_var_key(GETP_ARG(&nm_intf, "0.0")));
+++    rv = 0;
+++exit:
+++    amxc_string_clean(&search_path);
+++    amxc_var_clean(&nm_intf);
+++    return rv;
+++}
+++/**
+++ * @brief Callback function for name change events on  CM's corresponding NetModel Interface.
+++
+++ * @param[in] sig_name The name of the signal that triggered this callback (unused).
+++ * @param[in] data A pointer to an amxc_var_t containing the event data.
+++ * @param[in] priv A pointer to a cell_iface_t structure, which provides context for the callback.
+++
+++ * @return None
+++*/
+++static void netmodel_name_change_cb(UNUSED const char* const sig_name,
+++                                    const amxc_var_t* const data,
+++                                    void* const priv) {
+++    when_null(data, exit);
+++    when_null(priv, exit);
+++
+++    int rv = -1;
+++    const char* nm_intf_path = GETP_CHAR(data, "path");
+++    const char* name = GETP_CHAR(data, "parameters.Name.to");
+++    cell_iface_t* cell_iface  = (cell_iface_t*) priv;
+++    SAH_TRACEZ_INFO(ME, "Netmodel Name changed to %s!", name);
+++
+++    if(strncmp(name, QMAPMUX, sizeof(QMAPMUX)-1) == 0) {
+++        /* set netdev flag is required to let other managers know about new qmapmux interface*/
+++        update_flag(nm_intf_path, "netdev", true);
+++        SAH_TRACEZ_INFO(ME, "netdev flag set!");
+++    } else {
+++        /* clear netdev flag is required as qmapmux interface is no longer exist*/
+++        SAH_TRACEZ_INFO(ME, "netdev flag cleared!");
+++        update_flag(nm_intf_path, "netdev", false);
+++    }
+++
+++
+++    // unsubscribe
+++    if (cell_iface->nm_name_subscription != NULL) {
+++        rv = amxb_subscription_delete(&(cell_iface->nm_name_subscription));
+++        cell_iface->nm_name_subscription = NULL;
+++        when_failed_trace(rv, exit, ERROR, "failed to unsubscribe name change event from netmodel intf");
+++    }
+++exit:
+++    return;
+++}
+++
+++static void nm_subscribe_for_name_param(const char* intf_obj_path, cell_iface_t* cell_iface) {
+++    const char* netmodel_intf = NULL;
+++    amxc_string_t filter;
+++    amxc_string_t nm_intf_path;
+++
+++    when_null(intf_obj_path, exit);
+++    when_null(cell_iface, exit);
+++
+++    amxc_string_init(&filter, 0);
+++    amxc_string_init(&nm_intf_path, 0);
+++
+++    // find corresponding nm path
+++    get_corresponding_nm_intf(intf_obj_path, &nm_intf_path);
+++    netmodel_intf = amxc_string_get(&nm_intf_path, 0);
+++    when_str_empty(netmodel_intf, exit);
+++
+++    // subscribe
+++    if (cell_iface->nm_name_subscription != NULL) {
+++        amxb_subscription_delete(&(cell_iface->nm_name_subscription));
+++        SAH_TRACEZ_INFO(ME, "Deleted old subscription exsits!");
+++    }
+++
+++    amxc_string_setf(&filter, "notification in ['dm:object-changed'] && "
+++                                         "path matches '%s' &&"
+++                                         "contains('parameters.Name')", netmodel_intf);
+++    amxb_subscription_new(&(cell_iface->nm_name_subscription), netmodel_get_amxb_bus(), "NetModel.Intf.",
+++                          amxc_string_get(&filter, 0),netmodel_name_change_cb, cell_iface);
+++    when_null_trace(cell_iface->nm_name_subscription, exit, WARNING, "Failed to create subscription");
+++exit:
+++    amxc_string_clean(&nm_intf_path);
+++    amxc_string_clean(&filter);
+++    return;
+++}
++ void cell_iface_fill_trans(cell_iface_t* cell_iface, amxd_trans_t* trans) {
++     amxc_var_t data;
++     amxc_var_t ret;
++@@ -426,6 +570,20 @@ void cell_iface_fill_trans(cell_iface_t* cell_iface, amxd_trans_t* trans) {
++                       exit, ERROR, "retrieve-cell-bearer-info failed");
++     cellular_info_fill_trans(bearer_object, trans, BearerParams, &ret);
++ 
+++   /* When a new connection is established, the netdev interface may change.
+++    * To let other mgrs know about this change, we need to update the netdev flag
+++    * on the corresponding NetModel interface.
+++    */
+++    if (strcmp(cell_iface->netdev_intf , GET_CHAR(&ret, "Name"))) {
+++        SAH_TRACEZ_INFO(ME, "Name updated from libmm");
+++        char *intf_obj_path = NULL;
+++        intf_obj_path = amxd_object_get_path(cell_iface->object, AMXD_OBJECT_INDEXED);
+++        nm_subscribe_for_name_param(intf_obj_path , cell_iface);
+++        if (intf_obj_path)
+++            free(intf_obj_path);
+++    }
+++    strncpy(cell_iface->netdev_intf, GET_CHAR(&ret, "Name"), sizeof(cell_iface->netdev_intf));
+++
++     bearer_ipv4_object = amxd_object_get_child(bearer_object, "IPv4");
++     if(bearer_ipv4_object && GET_ARG(&ret, "IPv4")) {
++         cellular_info_fill_trans(bearer_ipv4_object, trans, BearerIPv4Params, GET_ARG(&ret, "IPv4"));
++diff --git a/src/cellular_utils.c b/src/cellular_utils.c
++index 7dc3d1e..a307c64 100644
++--- a/src/cellular_utils.c
+++++ b/src/cellular_utils.c
++@@ -405,7 +405,7 @@ void netdev_link_added_subscription_new(cell_iface_t* cell_iface) {
++     when_null_trace(ctx, exit, WARNING, "ctx not known, no subscription created");
++ 
++     amxc_string_setf(&expr, "notification == 'dm:instance-added' && path == 'NetDev.Link.' " \
++-                     "&& parameters.Alias == '%s'", cell_iface->netdev_intf);
+++                     "&& parameters.Alias starts with 'qmapmux'");
++     amxb_subscription_new(&(cell_iface->netdev_new_link_subscription), ctx, "NetDev.Link.",
++                           amxc_string_get(&expr, 0), _netdev_new_link_added_cb, cell_iface);
++     when_null_trace(cell_iface->netdev_new_link_subscription, exit, WARNING, "failed to create subscription");
++@@ -432,8 +432,8 @@ void netdev_link_state_subscription_new(cell_iface_t* cell_iface) {
++     ctx = cellular_get_netdev_ctx();
++     when_null_trace(ctx, exit, WARNING, "ctx not known, no subscription created");
++ 
++-    amxc_string_setf(&expr, "eobject == 'NetDev.Link.[%s].' && "
++-                     "contains('parameters.State')", cell_iface->netdev_intf);
+++    amxc_string_setf(&expr, "eobject starts with 'NetDev.Link.[qmapmux' && "
+++                     "contains('parameters.State')");
++     amxb_subscription_new(&(cell_iface->netdev_status_subscription), ctx, "NetDev.Link.",
++                           amxc_string_get(&expr, 0), _netdev_link_state_cb, cell_iface);
++     when_null_trace(cell_iface->netdev_status_subscription, exit, WARNING, "failed to create subscription");
+-- 
+2.17.1
+

@@ -1,0 +1,186 @@
+From b54f9d8ec5466835f36b64569cb18c6598e3f1fa Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Fri, 22 Aug 2025 11:22:27 +0530
+Subject: [PATCH] Scripts for FR in feeds
+Signed-off-by: Nazerin N<nazen@qti.qualcomm.com>
+
+---
+ .../0001-Scripts-for-FR-in-build.patch        | 166 ++++++++++++++++++
+ 1 file changed, 166 insertions(+)
+ create mode 100644 net_services/plugins/tr181-device/patches/0001-Scripts-for-FR-in-build.patch
+
+diff --git a/net_services/plugins/tr181-device/patches/0001-Scripts-for-FR-in-build.patch b/net_services/plugins/tr181-device/patches/0001-Scripts-for-FR-in-build.patch
+new file mode 100644
+index 0000000..3982ac6
+--- /dev/null
++++ b/net_services/plugins/tr181-device/patches/0001-Scripts-for-FR-in-build.patch
+@@ -0,0 +1,166 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 888f29053a7d6b0fc9171cf97f97e4b4dc4ab502 Mon Sep 17 00:00:00 2001
++From: Nazerin N <nazen@qti.qualcomm.com>
++Date: Fri, 22 Aug 2025 11:18:27 +0530
++Subject: [PATCH] Scripts for FR in build
++
++---
++ makefile              |   2 +
++ scripts/reset_hard.sh | 120 ++++++++++++++++++++++++++++++++++++++++++
++ 2 files changed, 122 insertions(+)
++ create mode 100644 scripts/reset_hard.sh
++
++diff --git a/makefile b/makefile
++index 19403bc..43857b9 100644
++--- a/makefile
+++++ b/makefile
++@@ -42,6 +42,7 @@ install: all
++ 	$(INSTALL) -d -m 0755 $(DEST)$(BINDIR)
++ 	ln -sfr $(DEST)$(BINDIR)/amxrt $(DEST)$(BINDIR)/$(COMPONENT)
++ 	$(INSTALL) -D -p -m 0755 scripts/$(COMPONENT).sh $(DEST)$(INITDIR)/$(COMPONENT)
+++	$(INSTALL) -D -p -m 0755 scripts/reset_hard.sh $(DEST)/usr/bin/reset_hard
++ 
++ package: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
++@@ -58,6 +59,7 @@ package: all
++ 	rm -f $(PKGDIR)$(BINDIR)/$(COMPONENT)
++ 	ln -sfr $(PKGDIR)$(BINDIR)/amxrt $(PKGDIR)$(BINDIR)/$(COMPONENT)
++ 	$(INSTALL) -D -p -m 0755 scripts/$(COMPONENT).sh $(PKGDIR)$(INITDIR)/$(COMPONENT)
+++	$(INSTALL) -D -p -m 0755 scripts/reset_hard.sh $(PKGDIR)/usr/bin/reset_hard
++ 	cd $(PKGDIR) && $(TAR) -czvf ../$(COMPONENT)-$(VERSION).tar.gz .
++ 	cp $(PKGDIR)../$(COMPONENT)-$(VERSION).tar.gz .
++ 	make -C packages
++diff --git a/scripts/reset_hard.sh b/scripts/reset_hard.sh
++new file mode 100644
++index 0000000..ffb9b1b
++--- /dev/null
+++++ b/scripts/reset_hard.sh
++@@ -0,0 +1,120 @@
+++#!/bin/sh
+++# Purpose: Factory reset prplOS
+++
+++# SET UP LOGGING
+++LOGFILE="/var/log/factory_reset.log"
+++
+++# Sanitize function for log entries
+++sanitize() {
+++    if [ -z "$1" ]; then
+++        echo "unknown"
+++    else
+++        echo "$1" | tr -cd '[:alnum:][:space:]._:-'
+++    fi
+++}
+++
+++log() {
+++    echo "$(date): $1" >> $LOGFILE
+++    echo "$1"
+++}
+++
+++# Check if running as root
+++if [ "$(id -u)" -ne 0 ]; then
+++    log "This script must be run as root"
+++    exit 1
+++fi
+++
+++log "Starting factory reset"
+++caller_process=$(ps -o comm= -p $PPID)
+++log "Script called by: $(sanitize "$caller_process")"
+++log "Arguments: $(sanitize "$@")"
+++
+++# Reset IPA subsystem
+++log "Resetting IPA subsystem..."
+++if ipa reset; then
+++    log "IPA reset command executed successfully"
+++    IPA_RESET_SUCCESS=true
+++else
+++    log "Failed to execute IPA reset"
+++    log "Factory reset aborted due to IPA reset failure"
+++    exit 1  # Exit immediately if IPA reset fails
+++fi
+++
+++# Delete /etc/config directory based on IPA reset status
+++if [ "$IPA_RESET_SUCCESS" = true ]; then
+++    log "IPA reset successful, removing /etc/config directory completely"
+++    if [ -d "/etc/config" ]; then
+++        rm -rf /etc/config && log "Successfully removed /etc/config directory" || log "Failed to remove /etc/config directory"
+++    else
+++        log "/etc/config directory not found"
+++    fi
+++else
+++    log "IPA reset failed, skipping /etc/config directory removal"
+++fi
+++
+++# Clean temporary files
+++for temp_dir in /tmp /var/tmp /var/log; do
+++    if [ -d "$temp_dir" ]; then
+++        log "Cleaning $temp_dir directory"
+++        # Use BusyBox compatible approach for temporary file cleanup
+++        find "$temp_dir" -type f -not -path "$LOGFILE" -exec rm -f {} + 2>/dev/null
+++        log "Cleaned $temp_dir directory"
+++    fi
+++done
+++
+++# Reset overlay directory (if it exists)
+++if [ -d "/overlay" ]; then
+++    log "Cleaning overlay directory..."
+++
+++    # Debug information
+++    log "Overlay directory permissions: $(ls -ld /overlay)"
+++    log "Overlay mount info: $(mount | grep overlay || echo 'No overlay mount found')"
+++    log "Contents before cleanup: $(ls -la /overlay | wc -l) items"
+++
+++    # Check if overlay is mounted
+++    if mount | grep -q "/overlay"; then
+++        log "Overlay is mounted, attempting to clean contents"
+++
+++        # Remove everything in overlay (no preservation needed)
+++        if find /overlay -mindepth 1 -exec rm -rf {} + 2>/dev/null; then
+++            log "Successfully cleaned /overlay using find"
+++        else
+++            log "Find method failed, trying alternative approach"
+++
+++            # Manual cleanup with better error handling
+++            cd /overlay
+++            for item in .[^.]* *; do
+++                if [ "$item" != "." ] && [ "$item" != ".." ] && [ -e "$item" ]; then
+++                    if rm -rf "$item" 2>/dev/null; then
+++                        log "Removed $item"
+++                    else
+++                        log "Failed to remove $item"
+++                    fi
+++                fi
+++            done
+++        fi
+++
+++        # Verify cleanup
+++        remaining_files=$(find /overlay -mindepth 1 -type f 2>/dev/null | wc -l)
+++        log "Remaining files in overlay: $remaining_files"
+++
+++    else
+++        log "Overlay not mounted, trying to clean anyway"
+++        find /overlay -mindepth 1 -exec rm -rf {} + 2>/dev/null && log "Successfully cleaned unmounted /overlay" || log "Failed to clean unmounted /overlay"
+++    fi
+++
+++    # Force filesystem sync
+++    sync
+++
+++else
+++    log "No /overlay directory found, skipping"
+++fi
+++
+++# Restart essential services
+++log "Factory reset completed. Restarting network services..."
+++if [ -x "/etc/init.d/network" ]; then
+++    /etc/init.d/network restart
+++fi
+++
+++sync
+++log "Factory reset completed successfully"
++--
++2.17.1
++
+--
+2.17.1
+

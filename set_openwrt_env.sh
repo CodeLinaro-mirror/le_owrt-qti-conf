@@ -1,36 +1,7 @@
 #!/bin/bash
 
-#Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted (subject to the limitations in the
-# disclaimer below) provided that the following conditions are met:
-#
-#   * Redistributions of source code must retain the above copyright
-#     notice, this list of conditions and the following disclaimer.
-#
-#   * Redistributions in binary form must reproduce the above
-#     copyright notice, this list of conditions and the following
-#     disclaimer in the documentation and/or other materials provided
-#     with the distribution.
-#
-#   * Neither the name of Qualcomm Innovation Center, Inc. nor the names of its
-#     contributors may be used to endorse or promote products derived
-#     from this software without specific prior written permission.
-#
-# NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE
-# GRANTED BY THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT
-# HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
-# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
-# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
-# IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
-# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
 
 TOPDIR=$(pwd)
 PRPL_VERSION=$(sed -n -e 's/^PRPL_VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
@@ -42,11 +13,15 @@ echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 bazel_based_target=0
-if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
-        /bin/cp $TOPDIR/owrt-qti-conf/P3/feeds.conf $TOPDIR
-elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
         /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
 fi
+
+function feeds_conf_path(){
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+	fi
+}
 
 cd $TOPDIR
 umask 022
@@ -114,12 +89,12 @@ function patch_upstream_feeds(){
 	feeds=(packages luci routing)
 	feeds_path=$TOPDIR/feeds
 	patches=$TOPDIR/owrt-qti-conf/feeds_patches
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
 	echo "Using feeds for Prplos version:$PRPL_VERSION"
 		if [ "${2}" != "recovery" ]; then
-		feeds=(packages luci routing feed_wifi_swl)
+		feeds=(packages luci routing feed_amx feed_lcm feed_prplmesh feed_prplos)
 		fi
-        patches=$TOPDIR/owrt-qti-conf/P3/feeds_patches
+        patches=$TOPDIR/owrt-qti-conf/P4/feeds_patches
 	elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
 	echo "Using feeds for Openwrt version:$OWRT_VERSION"
         patches=$TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds_patches
@@ -187,20 +162,6 @@ function update_configs(){
 				echo "$line" >> ".config"
 			fi
 		done < "owrt-qti-conf/V${OWRT_VERSION%%.*}/${1}/${2}.config"
-	fi
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] && [ -f "owrt-qti-conf/P3/${1}/${2}.config" ] ; then
-		IFS='='
-		#read line by line from owrt-qti-conf/P3/${1}/${2}.config
-		while read -r line; do
-			read -a configarr <<<"$line"
-			if grep  "${configarr[0]}=" ".config"
-			then
-				# if found
-				sed -i "s/${configarr[0]}=.*/$line/" .config
-			else
-				echo "$line" >> ".config"
-			fi
-		done < "owrt-qti-conf/P3/${1}/${2}.config"
 	fi
 }
 
@@ -311,6 +272,7 @@ function build_kernel_platform(){
 		echo "Please provide all the arguments required to build kernel: chip_target, kp_target, kp_variant"
 		return
 	fi
+
 	set_bazel_target ${1} || return 1
 	set_kernel_target ${1} ${2} ${3} || return 1
 
@@ -393,9 +355,9 @@ function run_gen_config(){
 
 	if [ "${2}" != "recovery" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
-			./scripts/gen_config.py prpl ${1}_${2} || return
+			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
-			./scripts/gen_config.py prpl || return
+			./scripts/gen_config.py prpl cellular || return
 		fi
 	fi
 }
@@ -451,13 +413,16 @@ function configure(){
 		fi
 	done
 
+	feeds_conf_path ${1} || return 1
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	cp owrt-qti-conf/${1}/${2}.config .config || return
-	update_configs ${1} ${2} || return
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+	else
+		cp owrt-qti-conf/${1}/${2}.config .config || return
+		update_configs ${1} ${2} || return
 	fi
 	patch_upstream_feeds ${1} ${2} || return 1
 	patch_openssl ${1} || return 1
@@ -499,33 +464,39 @@ function configure(){
 		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ "${1}" == "sdx75" ]; then
-		if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-			TARGET=sdxpinn
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+		TARGET=sdxpinn-prpl
+	else
+		if [ "${1}" == "sdx75" ]; then
+			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+				TARGET=sdxpinn
+			fi
+			if [ "${2}" = "cpe" ]; then
+				TARGET=sdxpinn-cpe-wkk
+			fi
+			if [ "${2}" = "cpe-v1" ]; then
+				TARGET=sdxpinn-cpe-wkk-v1
+			fi
+			if [ "${2}" = "mbb-512" ]; then
+				TARGET=sdxpinn-512
+			fi
 		fi
-		if [ "${2}" = "cpe" ]; then
-			TARGET=sdxpinn-cpe-wkk
-		fi
-		if [ "${2}" = "cpe-v1" ]; then
-                        TARGET=sdxpinn-cpe-wkk-v1
-                fi
-		if [ "${2}" = "mbb-512" ]; then
-			TARGET=sdxpinn-512
+
+		if [ "${1}" == "sdx85" ]; then
+		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+		            TARGET=sdxkova
+		        fi
+		        if [ "${2}" = "cpe" ] || [ "${2}" = "cpe-v1" ] ; then
+		            TARGET=sdxkova.cpe.wkk
+		        fi
+		        if [ "${2}" = "cpe-tarang" ]; then
+		            TARGET=sdxkova.cpe.tarang
+		        fi
+		        if [ "${2}" = "mbb-512" ]; then
+		            TARGET=sdxkova.512
+		        fi
 		fi
 	fi
-
-	if [ "${1}" == "sdx85" ]; then
-	        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
-	            TARGET=sdxkova
-	        fi
-	        if [ "${2}" = "cpe" ]; then
-	            TARGET=sdxkova.cpe.wkk
-	        fi
-	        if [ "${2}" = "mbb-512" ]; then
-	            TARGET=sdxkova.512
-	        fi
-	fi
-
 
 	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
 	# 	use case: build_all.sh in automation

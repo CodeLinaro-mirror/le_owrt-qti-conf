@@ -1,0 +1,69 @@
+From 47f1324789bd8fd0d2ef7a6d6f1f7f0998eed50f Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 00:25:57 +0530
+Subject: [PATCH] support for factory test mode
+
+---
+ .../0003-support-for-factory-test-mode.patch  | 50 +++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100644 net/modemmanager/patches/0003-support-for-factory-test-mode.patch
+
+diff --git a/net/modemmanager/patches/0003-support-for-factory-test-mode.patch b/net/modemmanager/patches/0003-support-for-factory-test-mode.patch
+new file mode 100644
+index 0000000..8cde217
+--- /dev/null
++++ b/net/modemmanager/patches/0003-support-for-factory-test-mode.patch
+@@ -0,0 +1,50 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From f9a700a64ae01ffefacc957cc0621961573c1f0b Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 00:23:13 +0530
++Subject: [PATCH] support for factory test mode
++
++---
++ include/ModemManager-enums.h | 3 ++-
++ src/mm-broadband-modem-qmi.c | 5 ++++-
++ 2 files changed, 6 insertions(+), 2 deletions(-)
++
++diff --git a/include/ModemManager-enums.h b/include/ModemManager-enums.h
++index 240c139..816a664 100644
++--- a/include/ModemManager-enums.h
+++++ b/include/ModemManager-enums.h
++@@ -177,7 +177,8 @@ typedef enum { /*< underscore_name=mm_modem_power_state >*/
++     MM_MODEM_POWER_STATE_UNKNOWN = 0,
++     MM_MODEM_POWER_STATE_OFF     = 1,
++     MM_MODEM_POWER_STATE_LOW     = 2,
++-    MM_MODEM_POWER_STATE_ON      = 3
+++    MM_MODEM_POWER_STATE_ON      = 3,
+++    MM_MODEM_POWER_STATE_FTM     = 4
++ } MMModemPowerState;
++ 
++ /**
++diff --git a/src/mm-broadband-modem-qmi.c b/src/mm-broadband-modem-qmi.c
++index 239834b..b8c618d 100644
++--- a/src/mm-broadband-modem-qmi.c
+++++ b/src/mm-broadband-modem-qmi.c
++@@ -2395,8 +2395,11 @@ dms_get_operating_mode_ready (QmiClientDms *client,
++         case QMI_DMS_OPERATING_MODE_OFFLINE:
++             g_task_return_int (task, MM_MODEM_POWER_STATE_OFF);
++             break;
++-        case QMI_DMS_OPERATING_MODE_SHUTTING_DOWN:
++         case QMI_DMS_OPERATING_MODE_FACTORY_TEST:
+++             g_task_return_int (task, MM_MODEM_POWER_STATE_FTM);
+++             mm_obj_dbg(NULL,"Modem in factory test mode");
+++             break;
+++        case QMI_DMS_OPERATING_MODE_SHUTTING_DOWN:
++         case QMI_DMS_OPERATING_MODE_RESET:
++         case QMI_DMS_OPERATING_MODE_UNKNOWN:
++         default:
++-- 
++2.34.1
++
+-- 
+2.34.1
+

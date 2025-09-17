@@ -1,0 +1,49 @@
+From 95f4ef44637d2f3e73035ed094a6149f853a1bf1 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 10:06:07 +0530
+Subject: [PATCH] Preferred RAT fix
+
+---
+ .../patches/0007-Preferred-RAT-fix.patch      | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 net/modemmanager/patches/0007-Preferred-RAT-fix.patch
+
+diff --git a/net/modemmanager/patches/0007-Preferred-RAT-fix.patch b/net/modemmanager/patches/0007-Preferred-RAT-fix.patch
+new file mode 100644
+index 0000000..b6107c7
+--- /dev/null
++++ b/net/modemmanager/patches/0007-Preferred-RAT-fix.patch
+@@ -0,0 +1,30 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 4eaa8e1d1e80cb3dc3c19a83898c2a91e2fe6d4b Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 10:04:01 +0530
++Subject: [PATCH] Preferred RAT fix
++
++---
++ src/mm-shared-qmi.c | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/src/mm-shared-qmi.c b/src/mm-shared-qmi.c
++index f290cda..a084360 100644
++--- a/src/mm-shared-qmi.c
+++++ b/src/mm-shared-qmi.c
++@@ -1315,6 +1315,7 @@ set_current_modes_system_selection_preference_ready (QmiClientNas *client,
++     GError                                          *error = NULL;
++ 
++     output = qmi_client_nas_set_system_selection_preference_finish (client, res, &error);
+++    usleep(5000);
++     if (!output || !qmi_message_nas_set_system_selection_preference_output_get_result (output, &error))
++         g_task_return_error (task, error);
++     else
++-- 
++2.34.1
++
+-- 
+2.34.1
+
