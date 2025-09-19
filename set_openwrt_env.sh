@@ -417,14 +417,17 @@ function configure(){
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+	if [ -n "${PRPL_VERSION}" ]; then
 		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+		if [ "${PRPL_VERSION}" = "4.0" ]; then
+			patch_upstream_feeds ${1} ${2} || return 1
+		fi
 	else
 		cp owrt-qti-conf/${1}/${2}.config .config || return
 		update_configs ${1} ${2} || return
+		patch_upstream_feeds ${1} ${2} || return 1
 	fi
-	patch_upstream_feeds ${1} ${2} || return 1
 	patch_openssl ${1} || return 1
 
 	#Create separate rootfs for recovery profile
