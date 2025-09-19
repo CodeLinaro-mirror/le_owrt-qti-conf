@@ -13,11 +13,15 @@ echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 bazel_based_target=0
-if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
-        /bin/cp $TOPDIR/owrt-qti-conf/P3/feeds.conf $TOPDIR
-elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
+if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
         /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
 fi
+
+function feeds_conf_path(){
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+	fi
+}
 
 cd $TOPDIR
 umask 022
@@ -85,12 +89,12 @@ function patch_upstream_feeds(){
 	feeds=(packages luci routing)
 	feeds_path=$TOPDIR/feeds
 	patches=$TOPDIR/owrt-qti-conf/feeds_patches
-	if [ -n "${PRPL_VERSION}" ] && [ "${PRPL_VERSION%%.*}"=="3" ] ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
 	echo "Using feeds for Prplos version:$PRPL_VERSION"
 		if [ "${2}" != "recovery" ]; then
-		feeds=(packages luci routing feed_amx feed_board_configuration feed_debug feed_gmap feed_lcm feed_net_core feed_net_hl_services feed_netmodel feed_net_services feed_opensource feed_peripheral feed_prpl feed_qos_firewall feed_tr69 feed_usp feed_wifi_core feed_wifi_swl)
+		feeds=(packages luci routing feed_amx feed_lcm feed_prplmesh feed_prplos)
 		fi
-        patches=$TOPDIR/owrt-qti-conf/P3/feeds_patches
+        patches=$TOPDIR/owrt-qti-conf/P4/feeds_patches
 	elif (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
 	echo "Using feeds for Openwrt version:$OWRT_VERSION"
         patches=$TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds_patches
@@ -351,9 +355,9 @@ function run_gen_config(){
 
 	if [ "${2}" != "recovery" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
-			./scripts/gen_config.py prpl ${1}_${2} || return
+			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
-			./scripts/gen_config.py prpl || return
+			./scripts/gen_config.py prpl cellular || return
 		fi
 	fi
 }
@@ -409,11 +413,12 @@ function configure(){
 		fi
 	done
 
+	feeds_conf_path ${1} || return 1
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
-		cp owrt-qti-conf/P3/${1}/${2}.config .config || return
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
 	else
 		cp owrt-qti-conf/${1}/${2}.config .config || return
@@ -459,7 +464,7 @@ function configure(){
 		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="3" )) ; then
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
 		TARGET=sdxpinn-prpl
 	else
 		if [ "${1}" == "sdx75" ]; then
@@ -481,7 +486,7 @@ function configure(){
 		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 		            TARGET=sdxkova
 		        fi
-		        if [ "${2}" = "cpe" ]; then
+		        if [ "${2}" = "cpe" ] || [ "${2}" = "cpe-v1" ] ; then
 		            TARGET=sdxkova.cpe.wkk
 		        fi
 		        if [ "${2}" = "cpe-tarang" ]; then

@@ -1,0 +1,109 @@
+From 7714c95d1f0a0a26f18815104b16c0f27b7c8f93 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 00:45:33 +0530
+Subject: [PATCH] Ensure the modem is fully operational before initiating
+ ModemManager operations
+
+---
+ ...-is-fully-operational-before-initiat.patch | 89 +++++++++++++++++++
+ 1 file changed, 89 insertions(+)
+ create mode 100644 net/modemmanager/patches/0004-Ensure-the-modem-is-fully-operational-before-initiat.patch
+
+diff --git a/net/modemmanager/patches/0004-Ensure-the-modem-is-fully-operational-before-initiat.patch b/net/modemmanager/patches/0004-Ensure-the-modem-is-fully-operational-before-initiat.patch
+new file mode 100644
+index 0000000..68a1f3f
+--- /dev/null
++++ b/net/modemmanager/patches/0004-Ensure-the-modem-is-fully-operational-before-initiat.patch
+@@ -0,0 +1,89 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From fd23e6c2ea4810e415a50791e414275b7df39115 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 00:43:34 +0530
++Subject: [PATCH] Ensure the modem is fully operational before initiating
++ ModemManager operations
++
++---
++ src/main.c | 37 +++++++++++++++++++++++++++++++++++++
++ 1 file changed, 37 insertions(+)
++
++diff --git a/src/main.c b/src/main.c
++index bdf1447..66ae235 100644
++--- a/src/main.c
+++++ b/src/main.c
++@@ -21,6 +21,7 @@
++ #include <unistd.h>
++ #include <stdlib.h>
++ 
+++#include <stdio.h>
++ #include <gio/gio.h>
++ #include <glib-unix.h>
++ 
++@@ -37,10 +38,16 @@
++ 
++ /* Maximum time to wait for all modems to get disabled and removed */
++ #define MAX_SHUTDOWN_TIME_SECS 20
+++#define BUFF_SIZE_16 16
+++#define MODEM_ACTIVE_STATUS_GET_CMD "cat /sys/class/remoteproc/remoteproc0/state"
+++/*Modem running status check timer - 100 ms*/
+++#define MODEM_STATUS_CHECK_TIMER_US 100000
++ 
++ static GMainLoop *loop;
++ static MMBaseManager *manager;
++ 
+++static gboolean modemActiveStatusCheck(void);
+++
++ static gboolean
++ quit_cb (gpointer user_data)
++ {
++@@ -216,6 +223,11 @@ main (int argc, char *argv[])
++     }
++ #endif
++ 
+++    /*wait for modem to active*/
+++    while(!modemActiveStatusCheck())
+++    {
+++        usleep(MODEM_STATUS_CHECK_TIMER_US);
+++    }
++     /* Go into the main loop */
++     loop = g_main_loop_new (NULL, FALSE);
++     g_main_loop_run (loop);
++@@ -260,3 +272,28 @@ main (int argc, char *argv[])
++ 
++     return 0;
++ }
+++
+++/*Fuction to check modem running status*/
+++static gboolean modemActiveStatusCheck(void)
+++{
+++    FILE *fp;
+++    char runningStatus[BUFF_SIZE_16];
+++    gboolean retVal = FALSE;
+++
+++    // Open the command for reading modem status
+++    fp = popen(MODEM_ACTIVE_STATUS_GET_CMD, "r");
+++    if (fp == NULL)
+++    {
+++        mm_info ("failed to read modem status");
+++        return retVal;
+++    }
+++
+++    if(fgets(runningStatus, sizeof(runningStatus), fp) != NULL)
+++    {
+++        if (strstr(runningStatus, "running") != NULL)
+++        retVal = TRUE;
+++    }
+++
+++    pclose(fp);
+++    return retVal;
+++}
++-- 
++2.34.1
++
+-- 
+2.34.1
+

@@ -1,0 +1,336 @@
+From 27a00afac4636acefb81a91d45923694d65b32d1 Mon Sep 17 00:00:00 2001
+From: Nazerin N <nazen@qti.qualcomm.com>
+Date: Thu, 21 Aug 2025 13:17:26 +0530
+Subject: [PATCH] fix: Fix using wrong reset_hard command (PPW-206)
+
+---
+ ...8af122a5014a279140191973e375250a6eb0.patch | 317 ++++++++++++++++++
+ 1 file changed, 317 insertions(+)
+ create mode 100644 net_services/plugins/tr181-device/patches/a0a98af122a5014a279140191973e375250a6eb0.patch
+
+diff --git a/net_services/plugins/tr181-device/patches/a0a98af122a5014a279140191973e375250a6eb0.patch b/net_services/plugins/tr181-device/patches/a0a98af122a5014a279140191973e375250a6eb0.patch
+new file mode 100644
+index 0000000..e3199e0
+--- /dev/null
++++ b/net_services/plugins/tr181-device/patches/a0a98af122a5014a279140191973e375250a6eb0.patch
+@@ -0,0 +1,317 @@
++From a0a98af122a5014a279140191973e375250a6eb0 Mon Sep 17 00:00:00 2001
++From: sahbot <support.opensource@softathome.com>
++Date: Fri, 13 Dec 2024 13:57:23 +0100
++Subject: [PATCH] fix: Fix using wrong reset_hard command (PPW-206)
++
++Problem: The code was using the reset_hard command even when reset_hard
++is not available
++
++Solution:
++- Only use reset_hard if this script is available.
++- Split the config variables in a different odl called tr181-device_vars.odl
++
++Issue: PPW-206 - Device.FactoryReset() returns success but device is not factory resetting
++Signed-off-by: Lucas Vecchete <lucas.vecchete@softathome.com>
++---
++ baf.yml                                       |  8 ++---
++ include_priv/device.h                         |  4 +++
++ makefile                                      |  3 ++
++ makefile.inc                                  |  4 ---
++ mod-debug-info/src/mod_debug_info_start.c     |  1 -
++ odl/tr181-device.odl                          |  9 +----
++ odl/tr181-device_vars.odl                     | 10 ++++++
++ src/device_rpc_calls.c                        | 34 ++++++++++++++-----
++ src/makefile                                  |  4 ---
++ src/tr181-device_main.c                       |  6 ++++
++ test/tr181-device_diagnostics/mod_dmproxy.odl |  1 +
++ .../tr181-device_test.odl                     |  1 +
++ test/tr181-device_rpcs/mod_dmproxy.odl        |  1 +
++ .../tr181-device_test.odl                     |  1 +
++ 14 files changed, 57 insertions(+), 30 deletions(-)
++ create mode 100644 odl/tr181-device_vars.odl
++
++diff --git a/baf.yml b/baf.yml
++index 9e84dba..d9e4a81 100644
++--- a/baf.yml
+++++ b/baf.yml
++@@ -23,11 +23,6 @@ configs:
++     default: 41
++     type: int
++     description: "Start up order for the tr181 device plugin"
++-  CONFIG_SAH_AMX_TR181_DEVICE_RESET_HARD_ENABLE:
++-    depends: CONFIG_SAH_AMX_TR181_DEVICE
++-    default: y
++-    type: bool
++-    description: "Custom using FactoryReset() rpc call reset_hard or firstboot -y"
++ 
++ makefiles:
++   compile:
++@@ -63,6 +58,9 @@ artifacts:
++ - source: "odl/$(COMPONENT)_definition.odl"
++   destination: "/etc/amx/$(COMPONENT)/$(COMPONENT)_definition.odl"
++   permissions: "0644"
+++- source: "odl/$(COMPONENT)_vars.odl"
+++  destination: "/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl"
+++  permissions: "0644"
++ - source: "odl/extensions/$(COMPONENT)_usp.odl"
++   destination: "/etc/amx/$(COMPONENT)/extensions/$(COMPONENT)_usp.odl"
++   permissions: "0644"
++diff --git a/include_priv/device.h b/include_priv/device.h
++index d711be6..544ea97 100644
++--- a/include_priv/device.h
+++++ b/include_priv/device.h
++@@ -86,6 +86,9 @@ extern "C"
++ 
++ #define ME "device"
++ 
+++#define STRING_IS_NULL(x)   ((x) == NULL) || (strcmp(x, "(null)") == 0)
+++#define STRING_EMPTY(TEXT) ((STRING_IS_NULL(TEXT)) || (*TEXT == 0))
+++
++ typedef struct _device_app {
++     amxd_dm_t* dm;
++     amxo_parser_t* parser;
++@@ -97,6 +100,7 @@ amxb_bus_ctx_t* device_get_ctx(void);
++ amxo_parser_t* device_get_parser(void);
++ int device_get_timeout(void);
++ amxd_dm_t* device_get_dm(void);
+++const char* device_get_reset_hard_path(void);
++ 
++ int _device_main(int reason,
++                  amxd_dm_t* dm,
++diff --git a/makefile b/makefile
++index 19403bc..36312af 100644
++--- a/makefile
+++++ b/makefile
++@@ -34,6 +34,7 @@ install: all
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/extensions/00_device-device_mapping.odl $(DEST)/etc/amx/$(COMPONENT)/extensions/00_device-device_mapping.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_definition.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_definition.odl
+++	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++ 	$(INSTALL) -D -p -m 0644 odl/extensions/$(COMPONENT)_usp.odl $(DEST)/etc/amx/$(COMPONENT)/extensions/$(COMPONENT)_usp.odl
++ 	$(INSTALL) -d -m 0755 $(D)//etc/amx/$(COMPONENT)/defaults.d
++ 	$(INSTALL) -D -p -m 0644 odl/amx-processmonitor/test-tr181-device.odl $(DEST)/etc/amx/amx-processmonitor/defaults.d/00-test-tr181-device.odl
++@@ -49,6 +50,7 @@ package: all
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/extensions/00_device-device_mapping.odl $(PKGDIR)/etc/amx/$(COMPONENT)/extensions/00_device-device_mapping.odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_definition.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_definition.odl
+++	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_vars.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_vars.odl
++ 	$(INSTALL) -D -p -m 0644 odl/extensions/$(COMPONENT)_usp.odl $(PKGDIR)/etc/amx/$(COMPONENT)/extensions/$(COMPONENT)_usp.odl
++ 	$(INSTALL) -d -m 0755 $(D)//etc/amx/$(COMPONENT)/defaults.d
++ 	$(INSTALL) -D -p -m 0644 odl/amx-processmonitor/test-tr181-device.odl $(PKGDIR)/etc/amx/amx-processmonitor/defaults.d/00-test-tr181-device.odl
++@@ -69,6 +71,7 @@ doc:
++ 	$(eval ODLFILES += odl/$(COMPONENT).odl)
++ 	$(eval ODLFILES += odl/extensions/00_device-device_mapping.odl)
++ 	$(eval ODLFILES += odl/$(COMPONENT)_definition.odl)
+++	$(eval ODLFILES += odl/$(COMPONENT)_vars.odl)
++ 	$(eval ODLFILES += odl/extensions/$(COMPONENT)_usp.odl)
++ 	$(eval ODLFILES += odl/amx-processmonitor/test-tr181-device.odl)
++ 
++diff --git a/makefile.inc b/makefile.inc
++index 2c31d02..c9f71e9 100644
++--- a/makefile.inc
+++++ b/makefile.inc
++@@ -46,7 +46,3 @@ PROCMONDIR ?= $(PREFIX)lib/processmonitor/scripts
++ 
++ # default config options
++ CONFIG_SAH_AMX_TR181_DEVICE_ORDER ?= 41
++-ifeq ($(DEFINE_ALL_BOOLEANS),y)
++-CONFIG_SAH_AMX_TR181_DEVICE_RESET_HARD_ENABLE ?= y
++-endif
++-
++diff --git a/mod-debug-info/src/mod_debug_info_start.c b/mod-debug-info/src/mod_debug_info_start.c
++index 1d6815b..374fff5 100644
++--- a/mod-debug-info/src/mod_debug_info_start.c
+++++ b/mod-debug-info/src/mod_debug_info_start.c
++@@ -75,7 +75,6 @@
++ #include "device_diagnostics.h"
++ #include "mod_debug_info.h"
++ 
++-#define STRING_IS_NULL(x)   ((x) == NULL) || (strcmp(x, "(null)") == 0)
++ // module trace zone
++ #define ME "mod-debug"
++ 
++diff --git a/odl/tr181-device.odl b/odl/tr181-device.odl
++index 2e79a5a..79c732b 100644
++--- a/odl/tr181-device.odl
+++++ b/odl/tr181-device.odl
++@@ -31,20 +31,13 @@
++         register-on-start-event = true,
++         use-async-handlers = true
++     };
++-
++-    // reboot timeout in seconds: If a graceful shutdown does not finish after "reboot_timeout" seconds, a hard reboot is triggered
++-    reboot_timeout = 300;
++-
++-    mod-dir = "/usr/lib/amx/${name}/modules";
++-
++-    // Name convention of the getDebugInformation output - FIXED: default one by the script, SERIAL_TIMESTAMP: <serialNumber of device>_<timestamp>.tgz
++-    debugname = "SERIAL_TIMESTAMP";
++ }
++ 
++ import "mod-dmext.so";
++ import "mod-dmproxy.so" as "proxy";
++ import "${name}.so" as "tr181-device";
++ 
+++include "${name}_vars.odl";
++ include "${definition_file}";
++ include "${defaults_dir}";
++ 
++diff --git a/odl/tr181-device_vars.odl b/odl/tr181-device_vars.odl
++new file mode 100644
++index 0000000..d887836
++--- /dev/null
+++++ b/odl/tr181-device_vars.odl
++@@ -0,0 +1,10 @@
+++%config {
+++    // reboot timeout in seconds: If a graceful shutdown does not finish after "reboot_timeout" seconds, a hard reboot is triggered
+++    %global reboot_timeout = 300;
+++
+++    %global mod-dir = "/usr/lib/amx/${name}/modules";
+++    %global reset_hard_path = "/usr/bin/reset_hard";
+++
+++    // Name convention of the getDebugInformation output - FIXED: default one by the script, SERIAL_TIMESTAMP: <serialNumber of device>_<timestamp>.tgz
+++    %global debugname = "SERIAL_TIMESTAMP";
+++}
++\ No newline at end of file
++diff --git a/src/device_rpc_calls.c b/src/device_rpc_calls.c
++index e94e4cc..237f738 100644
++--- a/src/device_rpc_calls.c
+++++ b/src/device_rpc_calls.c
++@@ -89,6 +89,9 @@
++ #define IS_REBOOT_CAUSE_VALID(cause) is_valid_args(reboot_causes, sizeof(reboot_causes) / sizeof(reboot_causes[0]), cause)
++ #define IS_FACTORY_RESET_CAUSE_VALID(cause) is_valid_args(facreset_causes, sizeof(facreset_causes) / sizeof(facreset_causes[0]), cause)
++ 
+++#define CMD_RESET_HARD "reset_hard"
+++#define CMD_FIRSTBOOT "firstboot"
+++
++ /**********************************************************
++ * Type definitions
++ **********************************************************/
++@@ -243,21 +246,36 @@ amxd_status_t _SendBootEvent(UNUSED amxd_object_t* object, UNUSED amxd_function_
++     return ret_status;
++ }
++ 
+++static const cstring_t reset_hard_command(bool use_reset_hard) {
+++    if(use_reset_hard) {
+++        return CMD_RESET_HARD;
+++    } else {
+++        return CMD_FIRSTBOOT;
+++    }
+++}
+++
++ static int reset_hard(void) {
++     int status = -1;
++     amxp_subproc_t* proc = NULL;
+++    const cstring_t cmd = NULL;
+++    bool use_reset_hard = false;
+++    const cstring_t filename = device_get_reset_hard_path();
++ 
+++    if((STRING_EMPTY(filename) == false) && (access(filename, F_OK) == 0)) {
+++        use_reset_hard = true;
+++    }
+++
+++    cmd = reset_hard_command(use_reset_hard);
++     amxp_subproc_new(&proc);
++-#if CONFIG_SAH_AMX_TR181_DEVICE_RESET_HARD_ENABLE
++-    amxp_subproc_start_wait(proc, 2000, (char*) "reset_hard", NULL);
++-    SAH_TRACEZ_INFO(ME, "Factory_Reset execute reset_hard");
++-#else
++-    amxp_subproc_start_wait(proc, 2000, (char*) "firstboot", "-y", NULL);
++-    SAH_TRACEZ_INFO(ME, "Factory_Reset execute firstboot");
++-#endif
+++    SAH_TRACEZ_INFO(ME, "Factory_Reset execute %s", cmd);
+++    if(use_reset_hard) {
+++        amxp_subproc_start_wait(proc, 2000, (char*) cmd, NULL);
+++    } else {
+++        amxp_subproc_start_wait(proc, 2000, (char*) cmd, "-y", NULL);
+++    }
++ 
++     status = amxp_subproc_get_exitstatus(proc);
++-    when_failed_trace(status, exit, ERROR, "Failed to execute factory reset command, with error code: (%i)", status);
+++    when_failed_trace(status, exit, ERROR, "Failed to execute factory reset command '%s', with error code: (%i)", cmd, status);
++     status = 0;
++ 
++ exit:
++diff --git a/src/makefile b/src/makefile
++index 28ad5d4..7562610 100644
++--- a/src/makefile
+++++ b/src/makefile
++@@ -31,10 +31,6 @@ else
++ 	CFLAGS += -Wstrict-prototypes -Wold-style-definition -Wnested-externs -std=c11
++ endif
++ 
++-ifeq ($(CONFIG_SAH_AMX_TR181_DEVICE_RESET_HARD_ENABLE),y)
++-    CFLAGS += -DCONFIG_SAH_AMX_TR181_DEVICE_RESET_HARD_ENABLE
++-endif
++-
++ LDFLAGS += $(STAGING_LIBDIR) \
++            -shared -fPIC \
++            -lamxc -lamxp -lamxd -lamxo -lamxm -lsahtrace
++diff --git a/src/tr181-device_main.c b/src/tr181-device_main.c
++index d062d20..38e7c21 100644
++--- a/src/tr181-device_main.c
+++++ b/src/tr181-device_main.c
++@@ -153,6 +153,12 @@ amxd_dm_t* device_get_dm(void) {
++     return app.dm;
++ }
++ 
+++const char* device_get_reset_hard_path(void) {
+++    amxc_var_t* setting = amxo_parser_get_config(app.parser, "reset_hard_path");
+++    const char* prefix = amxc_var_constcast(cstring_t, setting);
+++    return (prefix != NULL) ? prefix : "";
+++}
+++
++ int _device_main(int reason,
++                  amxd_dm_t* dm,
++                  amxo_parser_t* parser) {
++diff --git a/test/tr181-device_diagnostics/mod_dmproxy.odl b/test/tr181-device_diagnostics/mod_dmproxy.odl
++index 934775c..d66691b 100644
++--- a/test/tr181-device_diagnostics/mod_dmproxy.odl
+++++ b/test/tr181-device_diagnostics/mod_dmproxy.odl
++@@ -11,6 +11,7 @@
++ 
++ import "mod-dmproxy.so" as "proxy";
++ 
+++include "../../odl/tr181-device_vars.odl";
++ include "../../odl/tr181-device_definition.odl";
++ 
++ %define {
++diff --git a/test/tr181-device_interface_stack/tr181-device_test.odl b/test/tr181-device_interface_stack/tr181-device_test.odl
++index 8c3292b..bd8eb86 100644
++--- a/test/tr181-device_interface_stack/tr181-device_test.odl
+++++ b/test/tr181-device_interface_stack/tr181-device_test.odl
++@@ -74,6 +74,7 @@
++ 
++ import "mod-dmproxy.so" as "proxy";
++ 
+++include "../../odl/tr181-device_vars.odl";
++ include "../../odl/tr181-device_definition.odl";
++ 
++ %define {
++diff --git a/test/tr181-device_rpcs/mod_dmproxy.odl b/test/tr181-device_rpcs/mod_dmproxy.odl
++index 95b02c2..5e57fb9 100644
++--- a/test/tr181-device_rpcs/mod_dmproxy.odl
+++++ b/test/tr181-device_rpcs/mod_dmproxy.odl
++@@ -71,6 +71,7 @@
++ 
++ import "mod-dmproxy.so" as "proxy";
++ 
+++include "../../odl/tr181-device_vars.odl";
++ include "../../odl/tr181-device_definition.odl";
++ 
++ %define {
++diff --git a/test/tr181-device_start_stop/tr181-device_test.odl b/test/tr181-device_start_stop/tr181-device_test.odl
++index 3525a1d..c4cbf19 100644
++--- a/test/tr181-device_start_stop/tr181-device_test.odl
+++++ b/test/tr181-device_start_stop/tr181-device_test.odl
++@@ -74,6 +74,7 @@
++ 
++ import "mod-dmproxy.so" as "proxy";
++ 
+++include "../../odl/tr181-device_vars.odl";
++ include "../../odl/tr181-device_definition.odl";
++ 
++ %define {
++-- 
++GitLab
++
+-- 
+2.17.1
+

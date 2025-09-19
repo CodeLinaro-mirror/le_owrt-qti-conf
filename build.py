@@ -56,7 +56,7 @@ args = parser.parse_args()
 valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512']
-valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'cpe-v1', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -241,7 +241,7 @@ def print_build_configuration(target, profile, variant):
     time.sleep(0.25)
     print('# {} #'.format(line))
     time.sleep(0.25)
-    if prpl_version and prpl_version =='3.1':
+    if prpl_version and prpl_version =='4.0':
         print('# {} '.format(message_prpl))
     else:
         print('# {} '.format(message_owrt))
@@ -323,7 +323,7 @@ def generate_bin_ddm(profile):
 
 
 def getKernelPlatform(target, profile):
-    if prpl_version and prpl_version =='3.1' and target == 'sdx75' :
+    if prpl_version and prpl_version =='4.0' and target == 'sdx75' :
        platform = 'sdxpinn-prpl'
     elif target == 'sdx75':
         if profile == 'mbb' or profile == 'mbb-min':
@@ -340,7 +340,7 @@ def getKernelPlatform(target, profile):
     elif target == 'sdx85':
          if profile == 'mbb' or profile == 'mbb-min':
             platform = 'sdxkova'
-         elif profile == 'cpe':
+         elif profile == 'cpe' or profile == 'cpe-v1':
             platform = 'sdxkova.cpe.wkk'
          elif profile == 'cpe-tarang':
             platform = 'sdxkova.cpe.tarang'
@@ -374,8 +374,8 @@ if args.target == 'sdx75' or args.target == 'sdx85':
    else:
    #automation
        if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-v1' or args.profile == 'mbb-512':
-          set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-          build('recovery')
+           set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
+           build('recovery')
        else:
            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
