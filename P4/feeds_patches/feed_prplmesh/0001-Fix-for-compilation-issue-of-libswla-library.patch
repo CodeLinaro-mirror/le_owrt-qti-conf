@@ -1,0 +1,49 @@
+From 8b3d4bed4d48f2763a5f15cf31f963193c8ef470 Mon Sep 17 00:00:00 2001
+From: Srajana <srajana@qti.qualcomm.com>
+Date: Tue, 26 Aug 2025 11:18:45 +0530
+Subject: [PATCH] 0001-Fix-for-compilation-issue-of-libswla-library
+
+---
+ ...compilation-issue-of-libswla-library.patch | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 libs/libswla/patches/0001-Fix-for-compilation-issue-of-libswla-library.patch
+
+diff --git a/libs/libswla/patches/0001-Fix-for-compilation-issue-of-libswla-library.patch b/libs/libswla/patches/0001-Fix-for-compilation-issue-of-libswla-library.patch
+new file mode 100644
+index 0000000..9089b8a
+--- /dev/null
++++ b/libs/libswla/patches/0001-Fix-for-compilation-issue-of-libswla-library.patch
+@@ -0,0 +1,30 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++From 3be70e697190823c2f680375da20b0f70585a569 Mon Sep 17 00:00:00 2001
++From: Srajana <srajana@qti.qualcomm.com>
++Date: Fri, 22 Aug 2025 12:00:03 +0530
++Subject: [PATCH] Fix-for-compilation-issue-of-libswla-library.patch
++
++---
++ src/types/swla_tupleTypeArray.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/src/types/swla_tupleTypeArray.c b/src/types/swla_tupleTypeArray.c
++index 90721a4..5668486 100644
++--- a/src/types/swla_tupleTypeArray.c
+++++ b/src/types/swla_tupleTypeArray.c
++@@ -132,7 +132,7 @@ static size_t s_fillDataColumnFromMapParam(amxc_var_t* map, char* name, swl_tupl
++     memset(&myData, 0, myDataSize);
++ 
++     char* tmpName;
++-    char nameBuf[16];
+++    char nameBuf[21] = {0}; //Buffer size increased to 21 to accommodate longer parameter names
++     if(name != NULL) {
++         tmpName = name;
++     } else {
++-- 
++2.34.1
++
+-- 
+2.34.1
+

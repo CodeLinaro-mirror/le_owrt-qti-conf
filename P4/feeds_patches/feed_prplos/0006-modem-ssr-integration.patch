@@ -1,0 +1,850 @@
+From f7a27ba8f30108601bf6ad24db30e87e99b68032 Mon Sep 17 00:00:00 2001
+From: Sivapriya Seenivasan <sseeniva@qti.qualcomm.com>
+Date: Wed, 3 Sep 2025 12:18:00 +0530
+Subject: [PATCH] modem-ssr-integration
+
+---
+ .../patches/0005-libmm-handle-ssr-event.patch | 432 ++++++++++++++++++
+ .../0004-qcmap-controller-integration.patch   | 391 ++++++++++++++++
+ 2 files changed, 823 insertions(+)
+ create mode 100644 net_core/mods/mod-cellular-libmm/patches/0005-libmm-handle-ssr-event.patch
+ create mode 100644 net_core/plugins/cellular-manager/patches/0004-qcmap-controller-integration.patch
+
+diff --git a/net_core/mods/mod-cellular-libmm/patches/0005-libmm-handle-ssr-event.patch b/net_core/mods/mod-cellular-libmm/patches/0005-libmm-handle-ssr-event.patch
+new file mode 100644
+index 0000000..06d5c9c
+--- /dev/null
++++ b/net_core/mods/mod-cellular-libmm/patches/0005-libmm-handle-ssr-event.patch
+@@ -0,0 +1,432 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 49003910198b5b34f23bdfe60c98359160f7f2e7 Mon Sep 17 00:00:00 2001
++From: Sivapriya Seenivasan <sseeniva@qti.qualcomm.com>
++Date: Tue, 26 Aug 2025 16:32:33 +0530
++Subject: [PATCH] libmm-handle-ssr-event
++
++---
++ include_priv/mod_cellular-libmm.h |   1 +
++ makefile                          |   2 +
++ src/mod_cellular-libmm.c          | 297 +++++++++++++++++++++---------
++ 3 files changed, 215 insertions(+), 85 deletions(-)
++
++diff --git a/include_priv/mod_cellular-libmm.h b/include_priv/mod_cellular-libmm.h
++index 9702233..0cc6823 100644
++--- a/include_priv/mod_cellular-libmm.h
+++++ b/include_priv/mod_cellular-libmm.h
++@@ -191,6 +191,7 @@ int libmm_iface_get_profile_id(UNUSED const char* function_name,
++                            amxc_var_t* args,
++                            amxc_var_t* ret);
++
+++void libmm_handle_ssr_event(const char* status);
++ #ifdef __cplusplus
++ }
++ #endif
++diff --git a/makefile b/makefile
++index bc0dce1..cade34e 100644
++--- a/makefile
+++++ b/makefile
++@@ -27,6 +27,8 @@ clean:
++
++ install: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(DEST)/usr/lib/amx/modules/$(COMPONENT).so
+++	mkdir -p $(DEST)/usr/include/mod-cellular-libmm
+++	find include_priv -maxdepth 1 -name "*.h" -exec cp {} $(DEST)/usr/include/mod-cellular-libmm \;
++
++ package: all
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/$(COMPONENT).so $(PKGDIR)/usr/lib/amx/modules/$(COMPONENT).so
++diff --git a/src/mod_cellular-libmm.c b/src/mod_cellular-libmm.c
++index 11ead57..ffe8d96 100644
++--- a/src/mod_cellular-libmm.c
+++++ b/src/mod_cellular-libmm.c
++@@ -74,10 +74,16 @@
++
++ #define ME "libmm"
++
++-#define CHECK_MANAGER_OWNER_PERIOD  60   /* seconds */
++ #define MODEM_RECONNECT_PERIOD      30   /* seconds */
++ #define ICCID_MIN_LENGTH 6
++ #define DEFAULT_CELLULAR_INTERFACE "rmnet_ipa0"
+++
+++#define MM_START_CMD "/etc/init.d/modemmanager start"
+++#define MODEM_ACTIVE_STATUS_GET_CMD "service modemmanager status"
+++#define MM_STOP_CMD "/etc/init.d/modemmanager stop"
+++#define POLL_INTERVAL_MS 1
+++#define MM_STATUS_CHECK_RETRY_COUNT 5
+++#define MM_STATUS_CHECK_TIMEOUT 1
++ #define MODEM_ASSIGNMENT_RETRY_INTERVAL_MS 1000
++
++ static GMutex libmm_lock;
++@@ -86,7 +92,8 @@ static MMManager* libmm_manager = NULL;
++ static GCancellable* libmm_cancellable = NULL;
++ static GMainLoop* libmm_loop = NULL;
++ static GThread* libmm_thread = NULL;
++-
+++static gint modem_polling_source_id;
+++static gint mm_watch_id = 0;
++ static amxc_llist_t* libmm_cell_ifaces = NULL;
++
++ static void libmm_get_manager (GTask* task);
++@@ -96,6 +103,7 @@ static void libmm_modem_removed (MMManager* manager, MMObject* obj);
++ static void reset_libmm_cell_bearer(libmm_cell_bearer_t* bearer);
++
++ static gint get_profile_id_matching_apn(MMObject *modem_object, const char *apn, GError **error);
+++bool mm_service_active = true;
++
++ static void
++ libmm_exit(void) {
++@@ -179,46 +187,42 @@ exit:
++     return;
++ }
++
++-static gboolean check_manager_owner(GTask* task) {
++-    gchar* name_owner;
++-    libmm_cell_iface_t* cell_iface;
++-
++-    g_mutex_lock(&libmm_lock);
++-
++-    when_null(libmm_manager, error);
++-
++-    name_owner = g_dbus_object_manager_client_get_name_owner(G_DBUS_OBJECT_MANAGER_CLIENT(libmm_manager));
++-    when_null_trace(name_owner, error, ERROR, "modemmanager has stopped");
++-    g_free(name_owner);
++-
++-    g_mutex_unlock(&libmm_lock);
++-
++-    return G_SOURCE_CONTINUE;
+++/**
+++* @brief Periodically poll for the availability of modem ID.
+++*
+++* This function is designed to be called repeatedly (e.g., as a GSource callback
+++* or similar polling mechanism) to check for the presence and availability
+++* of modem ID.
+++*
+++* @param[in] user_data (unused in this specific signature).
+++*
+++* @return G_SOURCE_CONTINUE if polling should continue (modem ID not yet found
+++*         or process still ongoing), G_SOURCE_REMOVE if the modem ID has been
+++*         successfully found and polling should stop.
+++*/
+++static gboolean poll_for_modem_id(UNUSED gpointer user_data) {
+++    GList* modems;
++
++-error:
++-    if(libmm_manager != NULL) {
++-        g_signal_handlers_disconnect_by_func(libmm_manager, G_CALLBACK(libmm_modem_added), NULL);
++-        g_signal_handlers_disconnect_by_func(libmm_manager, G_CALLBACK(libmm_modem_removed), NULL);
++-        g_object_unref(libmm_manager);
++-        libmm_manager = NULL;
+++    /* Check if ModemManager instance is valid; if not, stop polling */
+++    if (!libmm_manager) {
+++       SAH_TRACEZ_INFO(ME,"ModemManager instance is NULL during polling. Stopping polling.");
+++       modem_polling_source_id = 0;
+++       return G_SOURCE_REMOVE;
++     }
++
++-    /* Reset all interfaces operational status */
++-    amxc_llist_for_each(it, libmm_cell_ifaces) {
++-        cell_iface = amxc_container_of(it, libmm_cell_iface_t, it);
++-
++-        detach_modem_from_cell_iface(cell_iface);
+++    /* Get list of objects (modems) from ModemManager D-Bus manager */
+++    modems = g_dbus_object_manager_get_objects(G_DBUS_OBJECT_MANAGER(libmm_manager));
++
++-        /* Instruct cellular manager to update Cellular.Interface object state */
++-        libmm_dm_read_interface_last_change(cell_iface);
+++    if (modems != NULL) {
+++       SAH_TRACEZ_INFO(ME,"Polling finished, Modem found!");
+++       modem_polling_source_id = 0;
+++       return G_SOURCE_REMOVE;
+++    } else {
+++       SAH_TRACEZ_INFO(ME,"No modems found yet");
++     }
++
++-    g_mutex_unlock(&libmm_lock);
++-
++-    /* Reattempt to get the pointer to MManager object */
++-    libmm_get_manager(task);
++-
++-    return G_SOURCE_REMOVE;
+++    /* Continue polling in the next iteration */
+++    return G_SOURCE_CONTINUE;
++ }
++
++ static GList*
++@@ -234,7 +238,7 @@ error:
++ }
++
++ static void
++-libmm_manager_new_ready (UNUSED GObject* source, GAsyncResult* res, GTask* task) {
+++libmm_manager_new_ready (UNUSED GObject* source, GAsyncResult* res, UNUSED GTask* task) {
++     MMManager* manager = NULL;
++     gchar* name_owner = NULL;
++     GError* error = NULL;
++@@ -295,11 +299,6 @@ exit:
++         g_object_unref(libmm_manager);
++         libmm_manager = NULL;
++     }
++-
++-    /* Start timer to
++-     *   - reattempt to obtain pointer to MManager object in case of error
++-     *   - check that modem manager daemon still runs after retrieving MManager object */
++-    g_timeout_add(CHECK_MANAGER_OWNER_PERIOD * 1000, (GSourceFunc) check_manager_owner, task);
++ }
++
++ static void
++@@ -503,6 +502,46 @@ static void libmm_access_technology_build_csv_string_from_mask(char* str, MMMode
++     }
++ }
++
+++/**
+++* @brief Enable a modem if it is in the disabled state.
+++*
+++* This function checks the modem state and enables it if it is disabled.
+++*
+++* @param[in] modem_object The modem object.
+++* @param[out] error A pointer to a GError to store any error that occurs.
+++*
+++* @return TRUE if the modem is enabled or was already enabled, FALSE otherwise.
+++*/
+++static gboolean libmm_modem_enable(MMObject *modem_object, GError **error) {
+++    MMModem *modem = NULL;
+++    MMModemState modem_state;
+++    const gchar *modem_path;
+++    gboolean result = FALSE;
+++
+++    when_null_trace(modem_object, exit, ERROR, "Modem object is NULL");
+++
+++    modem_path = mm_object_get_path(modem_object);
+++    SAH_TRACEZ_INFO(ME, "Checking modem state for %s", modem_path);
+++
+++    modem = mm_object_get_modem(modem_object);
+++    when_null_trace(modem, exit, ERROR, "Failed to get modem from object %s", modem_path);
+++
+++    modem_state = mm_modem_get_state(modem);
+++    if (modem_state == MM_MODEM_STATE_DISABLED) {
+++        if (!mm_modem_enable_sync(modem, NULL, error)) {
+++            SAH_TRACEZ_ERROR(ME, "Failed to enable modem %s: %s", modem_path, (*error)->message);
+++            goto exit;
+++        }
+++        SAH_TRACEZ_INFO(ME, "Modem %s enabled successfully", modem_path);
+++    }
+++
+++    result = TRUE;
+++
+++exit:
+++    g_clear_object(&modem);
+++    return result;
+++}
+++
++ static gboolean
++ mm_modem_run_sync (MMModem* modem, libmm_cell_iface_t* cell_iface, gboolean connect_flag) {
++     GError* error = NULL;
++@@ -543,7 +582,6 @@ mm_modem_run_sync (MMModem* modem, libmm_cell_iface_t* cell_iface, gboolean conn
++         }
++
++         if(cell_iface->bearer.name[0]) {
++-
++             g_clear_error(&error);
++             cell_iface->bearer.connected = false;
++             mm_bearer_disconnect_sync(cell_iface->bearer_object, NULL, NULL);
++@@ -1917,8 +1955,9 @@ libmm_modem_added (UNUSED MMManager* manager,
++         g_clear_error(&error);
++     }
++
++-    /* Reconnect modem if it is enabled */
++-    if(cell_iface->enable) {
+++    /* Reconnect modem if modem is enabled */
+++    GError* error = NULL;
+++    if((libmm_modem_enable(obj, &error)) && (cell_iface->enable)) {
++         gboolean run_result = mm_modem_run_sync(modem, cell_iface, TRUE);
++         if(!run_result)
++             g_strlcpy(cell_iface->status, "Error", sizeof(cell_iface->status));
++@@ -1963,46 +2002,6 @@ exit:
++     g_mutex_unlock(&libmm_lock);
++ }
++
++-/**
++-* @brief Enable a modem if it is in the disabled state.
++-*
++-* This function checks the modem state and enables it if it is disabled.
++-*
++-* @param[in] modem_object The modem object.
++-* @param[out] error A pointer to a GError to store any error that occurs.
++-*
++-* @return TRUE if the modem is enabled or was already enabled, FALSE otherwise.
++-*/
++-static gboolean libmm_modem_enable(MMObject *modem_object, GError **error) {
++-    MMModem *modem = NULL;
++-    MMModemState modem_state;
++-    const gchar *modem_path;
++-    gboolean result = FALSE;
++-
++-    when_null_trace(modem_object, exit, ERROR, "Modem object is NULL");
++-
++-    modem_path = mm_object_get_path(modem_object);
++-    SAH_TRACEZ_INFO(ME, "Checking modem state for %s", modem_path);
++-
++-    modem = mm_object_get_modem(modem_object);
++-    when_null_trace(modem, exit, ERROR, "Failed to get modem from object %s", modem_path);
++-
++-    modem_state = mm_modem_get_state(modem);
++-    if (modem_state == MM_MODEM_STATE_DISABLED) {
++-        if (!mm_modem_enable_sync(modem, NULL, error)) {
++-            SAH_TRACEZ_ERROR(ME, "Failed to enable modem %s: %s", modem_path, (*error)->message);
++-            goto exit;
++-        }
++-        SAH_TRACEZ_INFO(ME, "Modem %s enabled successfully", modem_path);
++-    }
++-
++-    result = TRUE;
++-
++-exit:
++-    g_clear_object(&modem);
++-    return result;
++-}
++-
++ /**
++  * @brief Get the profile ID matching a given APN from the modem.
++  *
++@@ -2153,6 +2152,134 @@ exit:
++     return retval;
++ }
++
+++/**
+++* @brief Callback function triggered when ModemManager appears on D-Bus.
+++*
+++* This function is invoked when a new ModemManager instance (identified by its bus name)
+++* appears on the system D-Bus. It typically indicates that the ModemManager service
+++* has started or reconnected.
+++*
+++* @param[in] connection The GDBusConnection instance (unused).
+++* @param[in] name The unique bus name of the appearing ModemManager service.
+++* @param[in] name_owner The unique name of the owner of the bus name.
+++* @param[in] user_data User-defined data passed to the callback (unused).
+++*
+++* @return void
+++*/
+++static void on_modem_manager_appeared(UNUSED GDBusConnection *connection,
+++                                      const gchar     *name,
+++                                      const gchar     *name_owner,
+++                                      UNUSED gpointer  user_data) {
+++    SAH_TRACEZ_INFO(ME,"D-Bus Watcher: ModemManager service '%s' appeared with owner '%s'", name, name_owner);
+++
+++    /* Trigger a continuous attempt of polling for every 1sec for getting modem ID */
+++    SAH_TRACEZ_INFO(ME,"Starting continuous polling for modem ID every %d ms", POLL_INTERVAL_MS);
+++    modem_polling_source_id = g_timeout_add(POLL_INTERVAL_MS * 1000, (GSourceFunc) poll_for_modem_id, libmm_manager);
+++}
+++
+++/**
+++* @brief Checks the active status of the ModemManager service.
+++*
+++* This function queries the system to determine if the ModemManager service
+++* is currently running and active.
+++*
+++* @return 0 if ModemManager is active and running, -1 otherwise (e.g., not active,
+++*         error checking status).
+++*/
+++static int check_mm_active_status(void) {
+++    SAH_TRACEZ_INFO(ME, "Entering MM active status");
+++    FILE *fp;
+++    char runningStatus[16];
+++    int retVal = -1;
+++
+++        for(int i = 0; i <= MM_STATUS_CHECK_RETRY_COUNT; i++) {
+++        /* Read the output of the command into the 'runningStatus' buffer */
+++        fp = popen(MODEM_ACTIVE_STATUS_GET_CMD, "r");
+++        if (fp == NULL) {
+++            SAH_TRACEZ_ERROR(ME, "Failed to read modem status");
+++            continue; // Try again in the next iteration
+++        }
+++        /* Check if the output indicates the modem manager is "running" */
+++        if(fgets(runningStatus, sizeof(runningStatus), fp) != NULL) {
+++            if (strstr(runningStatus, "running") != NULL) {
+++                retVal = 0;
+++                pclose(fp);
+++                break;
+++            }
+++            /* Check if the output indicates the modem manager is "inactive" */
+++            else if (strstr(runningStatus, "inactive") != NULL) {
+++                retVal = -1;
+++                pclose(fp);
+++                break;
+++            }
+++            else {
+++                pclose(fp);
+++                sleep(MM_STATUS_CHECK_TIMEOUT);
+++            }
+++        } else {
+++            pclose(fp);
+++        }
+++    }
+++    return retVal;
+++}
+++
+++/**
+++* @brief Handles the System Subsystem Restart (SSR) event for the ModemManager library.
+++*
+++* This function is invoked when a System Subsystem Restart (SSR) event occurs,
+++* indicating a restart or critical failure of a core system component.
+++*
+++* @param[in] status A string indicating MODEM_STATUS_DOWN/MODEM_STATUS_UP
+++*
+++* @return void
+++*/
+++void libmm_handle_ssr_event(const char* status){
+++    SAH_TRACEZ_INFO(ME,"Entering handle_ssr for status: %s", status);
+++
+++    if (0 == strncmp(status,"MODEM_STATUS_DOWN", strlen("MODEM_STATUS_DOWN"))) {
+++        SAH_TRACEZ_INFO(ME,"Out-of-Service Indication detected");
+++        /* Unwatch MM D-Bus on SSR */
+++        g_bus_unwatch_name(mm_watch_id);
+++        mm_watch_id = 0;
+++
+++        /* MM service successfully stopped and its inactive status confirmed */
+++        int cmd_result = system(MM_STOP_CMD);
+++        if (cmd_result == -1) {
+++            SAH_TRACEZ_ERROR(ME, "Failed to execute command to stop ModemManager");
+++        } else if (WEXITSTATUS(cmd_result) != 0) {
+++            SAH_TRACEZ_ERROR(ME, "Command to stop ModemManager failed with exit code %d", WEXITSTATUS(cmd_result));
+++        } else if (0 != check_mm_active_status()) {
+++            SAH_TRACEZ_INFO(ME, "Stopped Modem Manager due to Modem Out of Service Event");
+++            mm_service_active = false;
+++        }
+++    } else if ((0 == strncmp(status,"MODEM_STATUS_UP", strlen("MODEM_STATUS_UP"))) && (mm_service_active == false)) {
+++        SAH_TRACEZ_INFO(ME,"In-Service Indication detected.");
+++
+++        /* Start MM D-Bus object watch */
+++        mm_watch_id = g_bus_watch_name(G_BUS_TYPE_SYSTEM,
+++                                       "org.freedesktop.ModemManager1",
+++                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
+++                                       on_modem_manager_appeared,
+++                                       NULL,
+++                                       NULL,
+++                                       NULL);
+++
+++        /* MM service successfully started and its active status confirmed */
+++		int cmd_result = system(MM_START_CMD);
+++		if (cmd_result == -1) {
+++		    SAH_TRACEZ_ERROR(ME, "Failed to execute command to start ModemManager");
+++		} else if (WEXITSTATUS(cmd_result) != 0) {
+++		    SAH_TRACEZ_ERROR(ME, "Command to start ModemManager Service failed with exit code %d", WEXITSTATUS(cmd_result));
+++		} else if (0 == check_mm_active_status()) {
+++		    SAH_TRACEZ_INFO(ME, "Started Modem Manager after Modem In Service Event");
+++            mm_service_active = true;
+++	    }
+++    } else if ((0 == strncmp(status,"MODEM_STATUS_UP", strlen("MODEM_STATUS_UP"))) && (mm_service_active == true)) {
+++        SAH_TRACEZ_INFO(ME,"IN Indication at boot received.");
+++    }
+++    SAH_TRACEZ_INFO(ME,"Exiting handle_ssr");
+++}
+++
++ static AMXM_CONSTRUCTOR libmm_module_start(void) {
++     int retval = -1;
++     amxm_shared_object_t* so = amxm_so_get_current();
++--
++2.34.1
++
+diff --git a/net_core/plugins/cellular-manager/patches/0004-qcmap-controller-integration.patch b/net_core/plugins/cellular-manager/patches/0004-qcmap-controller-integration.patch
+new file mode 100644
+index 0000000..d9d9165
+--- /dev/null
++++ b/net_core/plugins/cellular-manager/patches/0004-qcmap-controller-integration.patch
+@@ -0,0 +1,391 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From b9ad9ccd1436238af081585dd6bae649c8495887 Mon Sep 17 00:00:00 2001
++From: Sivapriya Seenivasan <sseeniva@qti.qualcomm.com>
++Date: Tue, 26 Aug 2025 16:23:33 +0530
++Subject: [PATCH] qcmap-controller-integration
++
++---
++ include_priv/cellular_priv.h                  |  3 +
++ makefile                                      |  4 +
++ .../include_priv/mod-cellular-qcmap.h         | 24 ++++++
++ mod-cellular-qcmap/src/makefile               | 65 ++++++++++++++
++ mod-cellular-qcmap/src/mod-cellular-qcmap.c   | 49 +++++++++++
++ .../src/mod-cellular-qcmap_apis.c             | 85 +++++++++++++++++++
++ odl/cellular-manager_definition.odl           |  2 +-
++ src/cellular-manager_entrypoint.c             | 36 ++++++++
++ 8 files changed, 267 insertions(+), 1 deletion(-)
++ create mode 100644 mod-cellular-qcmap/include_priv/mod-cellular-qcmap.h
++ create mode 100644 mod-cellular-qcmap/src/makefile
++ create mode 100644 mod-cellular-qcmap/src/mod-cellular-qcmap.c
++ create mode 100644 mod-cellular-qcmap/src/mod-cellular-qcmap_apis.c
++
++diff --git a/include_priv/cellular_priv.h b/include_priv/cellular_priv.h
++index fcfde2d..ebd5094 100644
++--- a/include_priv/cellular_priv.h
+++++ b/include_priv/cellular_priv.h
++@@ -93,6 +93,9 @@ extern "C" {
++ // Define the name of the module to be used when the controllers fail to load
++ #define DUMMY_CELLULAR_MOD_NAME "mod-cellular-dummy"
++
+++// Define the name of the module to be used when the controllers fail to load
+++#define MOD_QCMAP_CTRL "mod-cellular-qcmap"
+++
++ typedef struct _cellular {
++     amxd_dm_t* cellular_dm;
++     amxo_parser_t* parser;
++diff --git a/makefile b/makefile
++index 2d81247..28c6ab4 100644
++--- a/makefile
+++++ b/makefile
++@@ -22,11 +22,13 @@ endef
++ all:
++ 	$(MAKE) -C src all
++ 	$(MAKE) -C mod-cellular-dummy/src all
+++	$(MAKE) -C mod-cellular-qcmap/src all
++ 	$(MAKE) -C mod-cellular-qmi/src all
++
++ clean:
++ 	$(MAKE) -C src clean
++ 	$(MAKE) -C mod-cellular-dummy/src clean
+++	$(MAKE) -C mod-cellular-qcmap/src clean
++ 	$(MAKE) -C mod-cellular-qmi/src clean
++ 	$(MAKE) -C test clean
++ 	$(MAKE) -C doc clean
++@@ -34,6 +36,7 @@ clean:
++ install: all
++ 	$(INSTALL) -D -p -m 0755 output/$(MACHINE)/$(COMPONENT).so $(DEST)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-dummy.so $(DEST)/usr/lib/amx/$(COMPONENT)/modules/mod-cellular-dummy.so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qcmap.so $(DEST)/usr/lib/amx/modules/mod-cellular-qcmap.so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qmi.so $(DEST)/usr/lib/amx/modules/mod-cellular-qmi.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_definition.odl $(DEST)/etc/amx/$(COMPONENT)/$(COMPONENT)_definition.odl
++@@ -48,6 +51,7 @@ install: all
++ package: all
++ 	$(INSTALL) -D -p -m 0755 output/$(MACHINE)/$(COMPONENT).so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/$(COMPONENT).so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-dummy.so $(PKGDIR)/usr/lib/amx/$(COMPONENT)/modules/mod-cellular-dummy.so
+++	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qcmap.so $(PKGDIR)/usr/lib/amx/modules/mod-cellular-qcmap.so
++ 	$(INSTALL) -D -p -m 0644 output/$(MACHINE)/mod-cellular-qmi.so $(PKGDIR)/usr/lib/amx/modules/mod-cellular-qmi.so
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT).odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT).odl
++ 	$(INSTALL) -D -p -m 0644 odl/$(COMPONENT)_definition.odl $(PKGDIR)/etc/amx/$(COMPONENT)/$(COMPONENT)_definition.odl
++diff --git a/mod-cellular-qcmap/include_priv/mod-cellular-qcmap.h b/mod-cellular-qcmap/include_priv/mod-cellular-qcmap.h
++new file mode 100644
++index 0000000..d7fb006
++--- /dev/null
+++++ b/mod-cellular-qcmap/include_priv/mod-cellular-qcmap.h
++@@ -0,0 +1,24 @@
+++#if !defined(__MOD_CELLULAR_QMI_H__)
+++#define __MOD_CELLULAR_QMI_H__
+++
+++#ifdef __cplusplus
+++extern "C" {
+++#endif
+++
+++#include <amxc/amxc.h>
+++#include <amxc/amxc_macros.h>
+++#include <amxp/amxp.h>
+++#include <amxm/amxm.h>
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include <cellular_priv.h>
+++
+++// Function declarations
+++int modem_ind_register(const char* function_name, amxc_var_t* args, amxc_var_t* ret);
+++
+++#ifdef __cplusplus
+++}
+++#endif
+++
+++#endif // __MOD_CELLULAR_QMI_H__
+++
++diff --git a/mod-cellular-qcmap/src/makefile b/mod-cellular-qcmap/src/makefile
++new file mode 100644
++index 0000000..6179453
++--- /dev/null
+++++ b/mod-cellular-qcmap/src/makefile
++@@ -0,0 +1,65 @@
+++include ../../makefile.inc
+++
+++# Module name
+++MODULE = mod-cellular-qcmap
+++
+++# Build destination directories
+++OBJDIR = ../../output/$(MACHINE)
+++
+++# TARGETS
+++TARGET_SO = $(OBJDIR)/$(MODULE).so
+++
+++# Directories
+++SRCDIR = .
+++INCDIR_PRIV = ../include_priv ../../include_priv
+++INCDIRS = $(INCDIR_PRIV) $(if $(STAGINGDIR), $(STAGINGDIR)/include $(STAGINGDIR)/usr/include $(STAGINGDIR)/usr/include/libmod-cellular-qmi-qcmap $(STAGINGDIR)/usr/include/mod-cellular-libmm $(STAGINGDIR)/usr/include/glib-2.0 $(STAGINGDIR)/usr/include/ModemManager $(STAGINGDIR)/usr/include/libmm-glib)
+++STAGING_LIBDIR = $(if $(STAGINGDIR), -L$(STAGINGDIR)/lib -L$(STAGINGDIR)/usr/lib -L$(STAGINGDIR)/usr/lib/amx/modules)
+++
+++# Source files
+++SOURCES = $(wildcard $(SRCDIR)/*.c)
+++OBJECTS = $(addprefix $(OBJDIR)/,$(notdir $(SOURCES:.c=.o)))
+++
+++# Compilation and linking flags
+++CFLAGS += -Werror -Wall -Wextra \
+++          -Wwrite-strings -Wredundant-decls \
+++          -Wformat=2 -Wshadow \
+++          -Wmissing-declarations -Wno-attributes \
+++          -Wno-format-nonliteral \
+++          -DSAHTRACES_ENABLED -DSAHTRACES_LEVEL=500 \
+++          -fPIC -g3 $(addprefix -I,$(INCDIRS))
+++
+++ifeq ($(CC_NAME),g++)
+++    CFLAGS += -std=c++11
+++else
+++    CFLAGS += -Wstrict-prototypes -Wold-style-definition -Wnested-externs -std=gnu11
+++endif
+++
+++LDFLAGS += -shared -fPIC -rdynamic \
+++	$(STAGING_LIBDIR) \
+++	-Wl,-rpath=/usr/lib/amx/modules \
+++	-l:mod-cellular-libmm.so \
+++	-ldsutils \
+++	-ldiag \
+++	-lqcmap_client \
+++	-lqmi \
+++	-lstdc++ \
+++	-lamxc -lamxd -lamxb -lamxo -lamxm -lnetmodel -lamxrt -lamxm -lsahtrace -lamxp -lmod_cellular_qmi_qcmap
+++# Targets
+++
+++all: $(TARGET_SO)
+++
+++$(TARGET_SO): $(OBJECTS)
+++	$(CC) -Wl,-soname,$(MODULE).so -o $@ $(OBJECTS) $(LDFLAGS)
+++
+++-include $(OBJECTS:.o=.d)
+++
+++$(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)/
+++	$(CC) $(CFLAGS) -c -o $@ $<
+++	@$(CC) $(CFLAGS) -MM -MP -MT '$(@) $(@:.o=.d)' -MF $(@:.o=.d) $(<)
+++
+++$(OBJDIR)/:
+++	$(MKDIR) -p $@
+++
+++clean:
+++	rm -rf ../output/ ../$(MODULE)-*.* ../$(MODULE)_*.*
+++.PHONY: all clean
++diff --git a/mod-cellular-qcmap/src/mod-cellular-qcmap.c b/mod-cellular-qcmap/src/mod-cellular-qcmap.c
++new file mode 100644
++index 0000000..adb146b
++--- /dev/null
+++++ b/mod-cellular-qcmap/src/mod-cellular-qcmap.c
++@@ -0,0 +1,49 @@
+++#include <stdio.h>
+++#include <stdlib.h>
+++#include <string.h>
+++
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++
+++#include "mod-cellular-qcmap.h"
+++
+++#define ME "qcmap"
+++
+++// Module initialization
+++static AMXM_CONSTRUCTOR qcmap_module_start(void) {
+++    SAH_TRACEZ_IN(ME);
+++    SAH_TRACEZ_INFO(ME, "Entering qcmap_module_start function ");
+++
+++    int ret = 0;
+++    amxm_shared_object_t* so = amxm_so_get_current();
+++    amxm_module_t* mod = NULL;
+++
+++    if (!so) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to get current shared object");
+++        return -1;
+++    }
+++    SAH_TRACEZ_INFO(ME, "Successfully got shared object");
+++    ret = amxm_module_register(&mod, so, MOD_QCMAP_CTRL);
+++    if (ret != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to register module (ret = %d)\n", ret);
+++        return ret;
+++    }
+++
+++    // OOS and IS indication
+++    ret = amxm_module_add_function(mod, "register-modem-indication", modem_ind_register);
+++    if (ret != 0) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to register module (ret = %d)", ret);
+++        return ret;
+++    }
+++    SAH_TRACEZ_INFO(ME, "QCMAP Client loaded");
+++    SAH_TRACEZ_OUT(ME);
+++    return ret;
+++}
+++
+++// Module cleanup
+++static AMXM_DESTRUCTOR qcmap_module_stop(void) {
+++    SAH_TRACEZ_INFO(ME, "QCMAP Client stopped");
+++    return 0;
+++}
+++
+++
++diff --git a/mod-cellular-qcmap/src/mod-cellular-qcmap_apis.c b/mod-cellular-qcmap/src/mod-cellular-qcmap_apis.c
++new file mode 100644
++index 0000000..efc59c0
++--- /dev/null
+++++ b/mod-cellular-qcmap/src/mod-cellular-qcmap_apis.c
++@@ -0,0 +1,85 @@
+++#include <stdio.h>
+++#include <stdlib.h>
+++#include <string.h>
+++
+++#include <debug/sahtrace.h>
+++#include <debug/sahtrace_macros.h>
+++#include "mod-cellular-qcmap.h"
+++#include <mod_cellular-libmm.h>
+++#include <cellular_hal_qcmap.h>
+++
+++#define ME "qcmap"
+++
+++/*===========================================================================
+++FUNCTION:  mod_hal_cellular_qcmap_event_handler
+++===========================================================================*/
+++/*!
+++@brief
+++Callback function invoked when the modem status changes. It logs the received status
+++and then calls `libmm_handle_ssr` to process the modem's Subsystem Restart (SSR) event.
+++
+++@param
+++status_ind - The current status of the modem (e.g., MODEM_STATUS_UP, MODEM_STATUS_DOWN).
+++
+++@return
+++void
+++*/
+++/*=========================================================================*/
+++static void mod_hal_cellular_qcmap_event_handler(modem_status_t status_ind) {
+++    SAH_TRACEZ_INFO(ME,"Received modem status indication (via callback): %d",status_ind);
+++
+++    const char* modem_status;
+++    modem_status = (status_ind == 0) ? "MODEM_STATUS_UP" :
+++                   (status_ind == 1) ? "MODEM_STATUS_DOWN" :
+++                                       "MODEM_STATUS_UNKNOWN"; // Default for unexpected values
+++
+++    // Log if an unknown status was encountered
+++    if (strncmp(modem_status, "MODEM_STATUS_UNKNOWN", strlen("MODEM_STATUS_UNKNOWN")) == 0) {
+++        SAH_TRACEZ_ERROR(ME, "Received unknown modem status indication: %d, passing as UNKNOWN", status_ind);
+++    }
+++    SAH_TRACEZ_INFO(ME, "Passing string to libmm_handle_ssr: %s", modem_status);
+++    libmm_handle_ssr_event(modem_status);
+++}
+++
+++/*===========================================================================
+++FUNCTION:  modem_ind_register
+++===========================================================================*/
+++/*!
+++@brief
+++Initializes the modem indication retrieval process. This function registers for modem
+++status indications and sets up a callback to handle these indications, typically related
+++to Subsystem Restart (SSR) events.
+++
+++@param
+++function_name - Unused parameter.
+++@param
+++args - Arguments passed to the function (expected to be non-NULL).
+++@param
+++ret - Unused parameter for return value.
+++
+++@return
+++int - 0 on success, or an error code if registration or callback setup fails.
+++*/
+++/*=========================================================================*/
+++int modem_ind_register(UNUSED const char* function_name,
+++                       amxc_var_t* args,
+++                       UNUSED amxc_var_t* ret) {
+++
+++    SAH_TRACEZ_IN(ME);
+++    SAH_TRACEZ_INFO(ME, "Entering function modem_ind_register");
+++
+++    int rv = -1;
+++    when_null_trace(args, exit, ERROR, "No arguments provided");
+++
+++    rv = cellular_hal_qcmap_client_init();
+++    when_failed_trace(rv, exit, ERROR, "Registration of MODEM_STATUS_IND failed");
+++
+++    cellular_hal_qcmap_register_ssr_event_callback(mod_hal_cellular_qcmap_event_handler);
+++    SAH_TRACEZ_INFO(ME, "Registration of MODEM_STATUS_IND done!, rv=%d", rv);
+++    rv = 0;
+++exit:
+++    SAH_TRACEZ_INFO(ME, "End of function modem_ind_register");
+++    SAH_TRACEZ_OUT(ME);
+++    return rv;
+++}
+++
++diff --git a/odl/cellular-manager_definition.odl b/odl/cellular-manager_definition.odl
++index d394223..8dd2d37 100644
++--- a/odl/cellular-manager_definition.odl
+++++ b/odl/cellular-manager_definition.odl
++@@ -14,7 +14,7 @@
++         *
++         * @version 1.0
++         */
++-        %protected %read-only csv_string SupportedControllers = "mod-cellular-libmm, mod-cellular-qmi";
+++        %protected %read-only csv_string SupportedControllers = "mod-cellular-libmm, mod-cellular-qcmap, mod-cellular-qmi";
++
++         /**
++         * Configures the module that should be used to apply this Cellular DataModel
++diff --git a/src/cellular-manager_entrypoint.c b/src/cellular-manager_entrypoint.c
++index d9daabf..df85195 100644
++--- a/src/cellular-manager_entrypoint.c
+++++ b/src/cellular-manager_entrypoint.c
++@@ -115,6 +115,40 @@ exit:
++     return rv;
++ }
++
+++/**
+++* @brief Initializes cellular data by retrieving modem indications from QCMAP.
+++*
+++* This function serves as an initialization routine for cellular data.
+++* It primarily calls an external function (`retrieve-modem-indication`)
+++* provided by the QCMAP control module to fetch modem status.
+++*
+++* @return 0 on successful retrieval of modem indications, -1 on failure.
+++*/
+++static int cellular_prop_init(void) {
+++    SAH_TRACEZ_INFO(ME, "Entering cellular_prop_init....");
+++
+++    int rv = -1;
+++    amxc_var_t data;
+++    amxc_var_t ret;
+++
+++    amxc_var_init(&ret);
+++    when_failed_trace(amxc_var_init(&data), exit, ERROR, "Failed to init data");
+++
+++    amxc_var_set_type(&data, AMXC_VAR_ID_HTABLE);
+++    SAH_TRACEZ_INFO(ME, "Entering amxm_execute_function....");
+++    /* Execute the 'register-modem-indication' function within the QCMAP control module */
+++    when_failed_trace(amxm_execute_function(MOD_QCMAP_CTRL, MOD_QCMAP_CTRL, "register-modem-indication", &data, &ret),
+++                          exit, ERROR, "register-modem-indication failed");
+++
+++    SAH_TRACEZ_INFO(ME, "Successfully retrieved modem indication from QCMAP to CM");
+++    rv = 0;
+++exit:
+++    amxc_var_clean(&data);
+++    amxc_var_clean(&ret);
+++    SAH_TRACEZ_OUT(ME);
+++    return rv;
+++}
+++
++ static int cellular_init(amxd_dm_t* dm, amxo_parser_t* parser) {
++     int rv = -1;
++     SAH_TRACEZ_INFO(ME, "cellular manager start");
++@@ -130,6 +164,8 @@ static int cellular_init(amxd_dm_t* dm, amxo_parser_t* parser) {
++     rv = dm_mngr_load_controllers();
++     when_failed_trace(rv, exit, ERROR, "Failed to load cellular modules");
++
+++    when_failed_trace(cellular_prop_init(), exit, ERROR, "Failed to load cellular prop modules");
+++
++ exit:
++     SAH_TRACEZ_OUT(ME);
++     return rv;
++--
++2.34.1
++
+-- 
+2.34.1
+

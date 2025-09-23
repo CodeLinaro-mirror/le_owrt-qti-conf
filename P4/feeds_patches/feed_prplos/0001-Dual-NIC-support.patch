@@ -1,0 +1,95 @@
+From 530ea03b30d03daff93228b1adddbf2c03d54e51 Mon Sep 17 00:00:00 2001
+From: Shwetha .<shwe@qti.qualcomm.com>
+Date: Tue, 12 Aug 2025 16:02:41 +0530
+Subject: [PATCH] <Dual NIC support>
+Signed-off-by: Shwetha .<shwe@qti.qualcomm.com>
+---
+ ...1-ipa-cli-commands-based-on-eth-mode.patch | 77 +++++++++++++++++++
+ 1 file changed, 77 insertions(+)
+ create mode 100644 net_core/plugins/ethernet-manager/patches/0001-ipa-cli-commands-based-on-eth-mode.patch
+
+diff --git a/net_core/plugins/ethernet-manager/patches/0001-ipa-cli-commands-based-on-eth-mode.patch b/net_core/plugins/ethernet-manager/patches/0001-ipa-cli-commands-based-on-eth-mode.patch
+new file mode 100644
+index 0000000..8ddbf64
+--- /dev/null
++++ b/net_core/plugins/ethernet-manager/patches/0001-ipa-cli-commands-based-on-eth-mode.patch
+@@ -0,0 +1,77 @@
++#This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
++#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++#SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 298968a2c8a5d41254f5598a0816a65d8f5cc3f7 Mon Sep 17 00:00:00 2001
++From: Shwetha .<shwe@qti.qualcomm.com>
++Date: Tue, 12 Aug 2025 15:28:43 +0530
++Subject: [PATCH] ipa-cli commands based on eth mode
++Signed-off-by: Shwetha .<shwe@qti.qualcomm.com>
++---
++ src/dm_ethernet_actions.c | 29 +++++++++++++++++++++++++++++
++ 1 file changed, 29 insertions(+)
++
++diff --git a/src/dm_ethernet_actions.c b/src/dm_ethernet_actions.c
++index b171d79..03bc302 100644
++--- a/src/dm_ethernet_actions.c
+++++ b/src/dm_ethernet_actions.c
++@@ -61,6 +61,7 @@
++ ****************************************************************************/
++ #include <stdlib.h>
++ #include <string.h>
+++#include <sys/wait.h>
++ #include <debug/sahtrace.h>
++ #include <debug/sahtrace_macros.h>
++
++@@ -70,6 +71,7 @@
++ #include "ethernet_actions.h"
++
++ #define ME "actions"
+++#define MAXSIZE 256
++
++ amxd_status_t _check_is_empty_or_in(amxd_object_t* object,
++                                     amxd_param_t* param,
++@@ -220,6 +222,8 @@ amxd_status_t _ethernet_check_interface_upstream(amxd_object_t* object,
++     amxd_object_t* interface = NULL;
++     bool interface_upstream = false;
++     bool interface_upstream_old = false;
+++    char* name = NULL;
+++    char cmd[MAXSIZE];
++
++     if(reason != action_param_validate) {
++         rv = amxd_status_invalid_action;
++@@ -240,7 +244,32 @@ amxd_status_t _ethernet_check_interface_upstream(amxd_object_t* object,
++         rv = amxd_status_ok;
++     }
++
+++    //ipa cli commands based on upstream flag
+++    name = amxd_object_get_value(cstring_t, object, "Name", NULL);
+++    if (name == NULL) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to get interface name");
+++        rv = amxd_status_unknown_error;
+++        goto exit;
+++    }
+++    int cmd_len = snprintf(cmd, sizeof(cmd), "ipa xml category %s %s", name, interface_upstream? "WAN":"ODU");
+++    if (cmd_len < 0 || cmd_len >= (int)sizeof(cmd)) {
+++        SAH_TRACEZ_ERROR(ME, "Command buffer too small for interface name");
+++        rv = amxd_status_unknown_error;
+++        goto exit;
+++    }
+++    SAH_TRACEZ_INFO(ME, "Executing IPA-CLI command :%s", cmd);
+++
+++    int ret = system(cmd);
+++    if (ret == -1) {
+++        SAH_TRACEZ_ERROR(ME, "Failed to execute command: system() call failed");
+++    } else if (WIFEXITED(ret) && WEXITSTATUS(ret) == 0) {
+++        SAH_TRACEZ_INFO(ME, "Successfully executed %s", cmd);
+++    } else {
+++        SAH_TRACEZ_ERROR(ME, "Command %s failed with exit code %d", cmd, WEXITSTATUS(ret));
+++    }
+++
++ exit:
+++    free(name);
++     SAH_TRACEZ_OUT(ME);
++     return rv;
++ }
++--
++2.34.1
+--
+2.34.1
