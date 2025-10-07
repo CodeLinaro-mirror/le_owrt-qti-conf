@@ -464,8 +464,13 @@ function configure(){
 		sed -i "s/TARGET_PROFILE:=.*/TARGET_PROFILE:=${2}/" target/linux/${1}/Makefile || return
 	fi
 
-	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
-		TARGET=sdxpinn-prpl
+	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )); then
+		if [ "${1}" == "sdx75" ]; then
+			TARGET=sdxpinn-prpl
+		fi
+		if [ "${1}" == "sdx85" ]; then
+			TARGET=sdxkova.cpe.wkk
+		fi
 	else
 		if [ "${1}" == "sdx75" ]; then
 			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
