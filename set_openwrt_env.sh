@@ -420,6 +420,9 @@ function configure(){
 	if [ -n "${PRPL_VERSION}" ]; then
 		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+		./scripts/feeds uninstall bash || return
+		./scripts/feeds uninstall xz || return
+		./scripts/feeds install -a -f -p qtigplv2 || return
 		if [ "${PRPL_VERSION}" = "4.0" ]; then
 			patch_upstream_feeds ${1} ${2} || return 1
 		fi
