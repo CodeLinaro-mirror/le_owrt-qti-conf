@@ -75,6 +75,12 @@ function set_up_feeds(){
 		./scripts/feeds uninstall xz || return
 		./scripts/feeds install -a -f -p qtigplv2 || return
 	fi
+
+	if [[ "${1}" == "sdx85" && "${2}" == "cpe-v1" ]]; then
+		# Adding pci and pcie support
+		sed -i '/^FEATURES:=/ {/pci/!{/pcie/! s/$/ pci pcie/}}' target/linux/${1}/Makefile || return
+		./scripts/feeds install -a -f -p qtiipqopen || return
+	fi
 }
 
 function set_bazel_target(){
@@ -414,7 +420,7 @@ function configure(){
 	done
 
 	feeds_conf_path ${1} || return 1
-	set_up_feeds ${1} || return 1
+	set_up_feeds ${1} ${2} || return 1
 	rm -rf .config
 	rm -rf tmp
 	if [ -n "${PRPL_VERSION}" ]; then
@@ -497,9 +503,12 @@ function configure(){
 		        if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
 		            TARGET=sdxkova
 		        fi
-		        if [ "${2}" = "cpe" ] || [ "${2}" = "cpe-v1" ] ; then
+		        if [ "${2}" = "cpe" ]; then
 		            TARGET=sdxkova.cpe.wkk
 		        fi
+			if [ "${2}" = "cpe-v1" ]; then
+			    TARGET=sdxkova.prpl
+			fi
 		        if [ "${2}" = "cpe-tarang" ]; then
 		            TARGET=sdxkova.cpe.tarang
 		        fi

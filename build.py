@@ -346,8 +346,10 @@ def getKernelPlatform(target, profile):
     elif target == 'sdx85':
          if profile == 'mbb' or profile == 'mbb-min':
             platform = 'sdxkova'
-         elif profile == 'cpe' or profile == 'cpe-v1':
+         elif profile == 'cpe':
             platform = 'sdxkova.cpe.wkk'
+         elif profile == 'cpe-v1':
+            platform = 'sdxkova.prpl'
          elif profile == 'cpe-tarang':
             platform = 'sdxkova.cpe.tarang'
          elif profile == 'mbb-512':
