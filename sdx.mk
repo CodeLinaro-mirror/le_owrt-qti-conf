@@ -40,11 +40,13 @@ ifneq ($(EXTERNAL_BUILD),1)
 	include $(TOPDIR)/owrt-qti-core-internal/qticoreinternal.mk
 endif
 
-OPENWRT_STANDARD:=luci openssl-util diag
+OPENWRT_STANDARD:=openssl-util diag
 
-UTILS:=file luci-app-samba rng-tools profilerd tcpdump ip-bridge conntrack conntrackd pciutils iw-full fping iperf3 bind bind-dig usbutils
+UTILS:=file rng-tools profilerd tcpdump ip-bridge conntrack conntrackd pciutils iw-full fping iperf3 bind bind-dig usbutils
+
 ifeq ($(PRPL_VERSION),)
-UTILS+=ethtool
+OPENWRT_STANDARD+=luci
+UTILS+=luci-app-samba ethtool
 endif
 
 COREBSP_UTILS:=pm-utils
