@@ -417,14 +417,20 @@ function configure(){
 	set_up_feeds ${1} || return 1
 	rm -rf .config
 	rm -rf tmp
-	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
+	if [ -n "${PRPL_VERSION}" ]; then
 		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
+		./scripts/feeds uninstall bash || return
+		./scripts/feeds uninstall xz || return
+		./scripts/feeds install -a -f -p qtigplv2 || return
+		if [ "${PRPL_VERSION}" = "4.0" ]; then
+			patch_upstream_feeds ${1} ${2} || return 1
+		fi
 	else
 		cp owrt-qti-conf/${1}/${2}.config .config || return
 		update_configs ${1} ${2} || return
+		patch_upstream_feeds ${1} ${2} || return 1
 	fi
-	patch_upstream_feeds ${1} ${2} || return 1
 	patch_openssl ${1} || return 1
 
 	#Create separate rootfs for recovery profile
@@ -469,11 +475,11 @@ function configure(){
 			TARGET=sdxpinn-prpl
 		fi
 		if [ "${1}" == "sdx85" ]; then
-			TARGET=sdxkova.cpe.wkk
+			TARGET=sdxkova.prpl
 		fi
 	else
 		if [ "${1}" == "sdx75" ]; then
-			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ]; then
+			if [ "${2}" = "mbb" ] || [ "${2}" = "mbb-min" ] || [ "${2}" = "iot" ]; then
 				TARGET=sdxpinn
 			fi
 			if [ "${2}" = "cpe" ]; then
