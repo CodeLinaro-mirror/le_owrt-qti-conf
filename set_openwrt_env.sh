@@ -481,7 +481,7 @@ function configure(){
 			TARGET=sdxpinn-prpl
 		fi
 		if [ "${1}" == "sdx85" ]; then
-			TARGET=sdxkova.cpe.wkk
+			TARGET=sdxkova.prpl
 		fi
 	else
 		if [ "${1}" == "sdx75" ]; then
