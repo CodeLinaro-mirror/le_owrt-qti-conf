@@ -354,6 +354,10 @@ def getKernelPlatform(target, profile):
 prpl_version = get_prpl_version()
 print_build_configuration(args.target, args.profile, args.variant)
 
+current_build_timestamp=int(time.time())
+with open(os.path.join(TOPDIR, "version.date"), "w") as f:
+    f.write(str(current_build_timestamp) + "\n")
+
 # ------------------------ complete build sequence for sdx75/sdx85 target ---------------------------------
 
 if args.target == 'sdx75' or args.target == 'sdx85':
