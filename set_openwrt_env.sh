@@ -79,6 +79,9 @@ function set_up_feeds(){
 	if [[ "${1}" == "sdx85" && "${2}" == "cpe-v1" ]]; then
 		# Adding pci and pcie support
 		sed -i '/^FEATURES:=/ {/pci/!{/pcie/! s/$/ pci pcie/}}' target/linux/${1}/Makefile || return
+		if [ -d "owrt-qti-ipq-open/feeds/prpl-packages/hostapd" ]; then
+			rm -rf owrt-qti-ipq-open/feeds/prpl-packages/hostapd
+		fi
 		./scripts/feeds install -a -f -p qtiipqopen || return
 	fi
 }
