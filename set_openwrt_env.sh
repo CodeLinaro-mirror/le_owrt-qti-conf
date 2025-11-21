@@ -180,6 +180,10 @@ verify_target_configuration(){
 	else
 		echo "ERROR: Incorrect target configuration, TARGET ${1} was not configured successfully; see logs/target/linux/${1}/dump.txt for details."
 		echo "If package group .mk file in sdx.mk is target specific, please move .mk include line in target/linux/${1}/profiles/${1}.mk"
+		if [ -f "$TOPDIR/logs/target/linux/${1}/dump.txt" ]; then
+			echo "---- Error Log ----"
+			cat "$TOPDIR/logs/target/linux/${1}/dump.txt"
+		fi
 		return 1
 	fi
 }
