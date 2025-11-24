@@ -241,7 +241,7 @@ def print_build_configuration(target, profile, variant):
     time.sleep(0.25)
     print('# {} #'.format(line))
     time.sleep(0.25)
-    if prpl_version and prpl_version =='4.0':
+    if prpl_version:
         print('# {} '.format(message_prpl))
     else:
         print('# {} '.format(message_owrt))
@@ -323,8 +323,14 @@ def generate_bin_ddm(profile):
 
 
 def getKernelPlatform(target, profile):
-    if prpl_version and prpl_version =='4.0' and target == 'sdx75' :
-       platform = 'sdxpinn-prpl'
+    platform = None
+    if prpl_version:
+       if target == 'sdx75':
+          platform = 'sdxpinn-prpl'
+       elif target == 'sdx85':
+           platform = 'sdxkova.prpl'
+       else:
+           print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
     elif target == 'sdx75':
         if profile == 'mbb' or profile == 'mbb-min' or profile == 'iot':
             platform = 'sdxpinn'
