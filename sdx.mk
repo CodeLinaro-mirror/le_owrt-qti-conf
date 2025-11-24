@@ -11,10 +11,8 @@ include $(TOPDIR)/owrt-qti-data-prop/qtidataprop.mk
 include $(TOPDIR)/owrt-qti-ril-prop/qtirilprop.mk
 include $(TOPDIR)/owrt-qti-bt/qtibt.mk
 include $(TOPDIR)/owrt-qti-bt-prop/qtibtprop.mk
-ifeq ($(PRPL_VERSION),)
-include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
-include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
-endif
+-include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
+-include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
 include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
 
 ifeq ($(BOARD),sdx85)
