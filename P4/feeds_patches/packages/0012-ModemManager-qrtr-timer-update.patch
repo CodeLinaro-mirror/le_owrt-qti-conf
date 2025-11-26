@@ -1,0 +1,58 @@
+From 8133bf446f2a7ec8bfb1d1ebd1e7b9736698dfb5 Mon Sep 17 00:00:00 2001
+From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
+Date: Wed, 27 Aug 2025 14:48:16 +0530
+Subject: [PATCH] ModemManager-qrtr-timer-update
+
+---
+ .../0009-ModemManager_qrtr_timer_update.patch | 39 +++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+ create mode 100644 net/modemmanager/patches/0009-ModemManager_qrtr_timer_update.patch
+
+diff --git a/net/modemmanager/patches/0009-ModemManager_qrtr_timer_update.patch b/net/modemmanager/patches/0009-ModemManager_qrtr_timer_update.patch
+new file mode 100644
+index 0000000..a02f8de
+--- /dev/null
++++ b/net/modemmanager/patches/0009-ModemManager_qrtr_timer_update.patch
+@@ -0,0 +1,39 @@
++This patch file is from Qualcomm Technologies, Inc. and
++is provided under the following license:
++Copyright (c) Qualcomm Technologies, Inc.
++and/or its subsidiaries.
++SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From f1c4e7fc7d334f163478906fe5ac9239d986a1c4 Mon Sep 17 00:00:00 2001
++From: Krishnapriya Kunhikannan <kkunhika@qti.qualcomm.com>
++Date: Wed, 27 Aug 2025 14:46:07 +0530
++Subject: [PATCH] ModemManager_qrtr_timer_update
++
++---
++ src/mm-qrtr-bus-watcher.c | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++diff --git a/src/mm-qrtr-bus-watcher.c b/src/mm-qrtr-bus-watcher.c
++index de7e6dd..1d623f5 100644
++--- a/src/mm-qrtr-bus-watcher.c
+++++ b/src/mm-qrtr-bus-watcher.c
++@@ -21,6 +21,7 @@
++ 
++ #include "mm-qrtr-bus-watcher.h"
++ 
+++#define SERVICE_DISCOVERY_TIME 10000
++ static void log_object_iface_init (MMLogObjectInterface *iface);
++ 
++ G_DEFINE_TYPE_EXTENDED (MMQrtrBusWatcher, mm_qrtr_bus_watcher, G_TYPE_OBJECT, 0,
++@@ -132,7 +133,7 @@ handle_qrtr_node_added (QrtrBus          *qrtr_bus,
++ 
++     qrtr_node_wait_for_services (node,
++                                  services,
++-                                 1000, /* ms */
+++                                 SERVICE_DISCOVERY_TIME, /* ms */
++                                  NULL,
++                                  (GAsyncReadyCallback) qrtr_node_services_ready,
++                                  ctx);
++-- 
++2.34.1
++
+-- 
+2.34.1
+

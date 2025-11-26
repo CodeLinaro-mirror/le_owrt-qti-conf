@@ -1,0 +1,179 @@
+From 7092dee73d487d2f33ab153ec217cfaa6aa6515c Mon Sep 17 00:00:00 2001
+From: Shwetha .<shwe@qti.qualcomm.com>
+Date: Fri, 22 Aug 2025 19:01:28 +0530
+Subject: [PATCH] <Auto IP for the LAN Interfaces>
+Signed-off-by: Shwetha .<shwe@qti.qualcomm.com>
+---
+ ...0001-Code-changes-related-to-auto-IP.patch | 160 ++++++++++++++++++
+ 1 file changed, 160 insertions(+)
+ create mode 100644 net_core/plugins/tr181-bridging/patches/0001-Code-changes-related-to-auto-IP.patch
+
+diff --git a/net_core/plugins/tr181-bridging/patches/0001-Code-changes-related-to-auto-IP.patch b/net_core/plugins/tr181-bridging/patches/0001-Code-changes-related-to-auto-IP.patch
+new file mode 100644
+index 0000000..11fa13f
+--- /dev/null
++++ b/net_core/plugins/tr181-bridging/patches/0001-Code-changes-related-to-auto-IP.patch
+@@ -0,0 +1,160 @@
++#This patch file is from Qualcomm Technologies, Inc.
++#and is provided under the following license:
++#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++#SPDX-License-Identifier: BSD-3-Clause-Clear
++
++From 5cd67ceb487be7d6bf16fe7fd3c248ebccae469b Mon Sep 17 00:00:00 2001
++From: Shwetha .<shwe@qti.qualcomm.com>
++Date: Fri, 22 Aug 2025 18:56:04 +0530
++Subject: [PATCH] <Code changes related to auto IP>
++Signed-off-by: Shwetha .<shwe@qti.qualcomm.com>
++---
++ include_priv/bridging_subscription_utils.h |  3 ++
++ src/bridging_dm_utils.c                    | 57 ++++++++++++++++++++++
++ src/bridging_subscription_utils.c          | 32 ++++++++++++
++ 3 files changed, 92 insertions(+)
++
++diff --git a/include_priv/bridging_subscription_utils.h b/include_priv/bridging_subscription_utils.h
++index 730e0f1..0f8fe35 100644
++--- a/include_priv/bridging_subscription_utils.h
+++++ b/include_priv/bridging_subscription_utils.h
++@@ -71,6 +71,9 @@ extern "C"
++ void netdev_link_state_subscription_new(port_info_t* port);
++ void netdev_link_state_subscription_delete(port_info_t* port);
++ void netdev_new_link_added_subscription(port_info_t* port);
+++//Auto IP code -starts
+++int netdev_add_del_address(const char* method, bool ipv4, const char* ifname, const char* ip_addr, int prefixlen);
+++//ends
++
++ #ifdef __cplusplus
++ }
++diff --git a/src/bridging_dm_utils.c b/src/bridging_dm_utils.c
++index e7fbbca..6a75b1f 100644
++--- a/src/bridging_dm_utils.c
+++++ b/src/bridging_dm_utils.c
++@@ -69,9 +69,19 @@
++ #include "bridging.h"
++ #include "bridging_dm_utils.h"
++ #include "bridging_utils.h"
+++#include "bridging_subscription_utils.h"
++
+++#define PREFIX 24
+++#define BASE_IP 10
+++#define MAX 254
+++#define SIZE 16
+++#define AUTO_IP "169.254.1.%d"
+++#define IP_ADD "AddIPAddress"
+++#define IP_DELETE "DeleteIPAddress"
++ #define ME "bridging"
++
+++static int baseip = BASE_IP;
+++
++ /**
++  * @brief Changes the bridge/port status in the datamodel
++  * @param obj the object pointer
++@@ -172,7 +182,9 @@ amxd_status_t bridging_update_bridge_status(amxd_object_t* bridge_obj, bridge_st
++ amxd_status_t bridging_update_port_status(port_info_t* port, const char* port_status) {
++     SAH_TRACEZ_IN(ME);
++     amxd_status_t rv = amxd_status_invalid_function_argument;
+++    char ip_addr[SIZE];
++     const char* new_status = NULL;
+++    bool is_management_port = amxd_object_get_value(bool, port->port_obj, "ManagementPort", NULL);
++
++     when_null_trace(port, exit, ERROR, "port should not be NULL, can not change state");
++     when_null_trace(port->port_obj, exit, ERROR, "port object should not be NULL, can not change state");
++@@ -200,7 +212,52 @@ amxd_status_t bridging_update_port_status(port_info_t* port, const char* port_st
++     port->last_change = get_system_uptime();
++
++     SAH_TRACEZ_INFO(ME, "status for port: %s set to %s", port->port_obj->name, new_status);
+++    //AUTO IP changes -starting
+++    memset(ip_addr, 0, sizeof(ip_addr));
+++    char * port_name = amxd_object_get_value(cstring_t, port->port_obj, "Name", NULL);
+++    //To skip assignment for bridge main interface added the below check
+++    if(!is_management_port){
+++        //checking the status is up and assiging the IP to the Interface
+++        if (strncmp(new_status, "Up", 2) == 0) {
+++            // Assign new IP
+++            snprintf(ip_addr, sizeof(ip_addr), AUTO_IP, baseip);
+++            SAH_TRACEZ_INFO(ME, "Assigning IP %s to interface %s", ip_addr, port_name);
+++            int ret = netdev_add_del_address(IP_ADD, true, port_name, ip_addr, PREFIX);
+++            if (!ret) {
+++                baseip++;
+++                if (baseip > MAX)
+++                    baseip = BASE_IP;
+++            }
+++            else
+++                SAH_TRACEZ_ERROR(ME, "Failed to assign IP %s to %s", ip_addr, port_name);
+++        }
+++        else { //when interface status is down, remove the autoIP
+++            amxc_var_t netdev_link;
+++            amxc_string_t search_path;
+++            amxb_bus_ctx_t* ctx = amxb_be_who_has("NetDev");
+++            int ret = -1;
+++
+++            amxc_var_init(&netdev_link);
+++            amxc_string_init(&search_path, 0);
+++
+++            when_str_empty_trace(port_name, exit, ERROR, "No interface name provided");
+++            ret = amxc_string_setf(&search_path, "NetDev.Link.[%s].IPv4Addr.*.", port_name);
+++            when_failed_trace(rv, exit, ERROR, "Failed to set search path");
++
+++            ret = amxb_get(ctx, amxc_string_get(&search_path, 0), 0, &netdev_link, 3);
+++
+++            amxc_var_for_each(ipv4_address_params, GET_ARG(&netdev_link, "0")) {
+++                uint32_t prefixlen = GET_UINT32(ipv4_address_params, "PrefixLen");
+++                const char* address = GET_CHAR(ipv4_address_params, "Address");
+++
+++                ret = netdev_add_del_address(IP_DELETE, true, port_name, address, prefixlen);
+++                if(ret){
+++                    SAH_TRACEZ_INFO(ME,"Removed the autoIP");
+++                }
+++            }
+++        }
+++    }
+++    //AutoIP changes-Ended
++ exit:
++     SAH_TRACEZ_OUT(ME);
++     return rv;
++diff --git a/src/bridging_subscription_utils.c b/src/bridging_subscription_utils.c
++index eb45081..a4108be 100644
++--- a/src/bridging_subscription_utils.c
+++++ b/src/bridging_subscription_utils.c
++@@ -221,3 +221,35 @@ exit:
++     SAH_TRACEZ_OUT(ME);
++     return;
++ }
+++
+++//AutoIP related changes -starting
+++/* Function to add or delete ip address to netdev using corresponding method of netdev*/
+++int netdev_add_del_address(const char* method, bool ipv4, const char* ifname, const char* ip_addr, int prefixlen){
+++
+++    SAH_TRACEZ_IN(ME);
+++    int rv = -1;
+++    amxc_var_t* ret=NULL;
+++    amxb_bus_ctx_t* ctx = amxb_be_who_has("NetDev.");
+++    amxc_string_t obj_string;
+++    amxc_var_t netdev_args;
+++
+++    amxc_string_init(&obj_string, 0);
+++    amxc_string_setf(&obj_string, "NetDev.Link.[%s].", ifname);
+++    amxc_var_init(&netdev_args);
+++    amxc_var_init(ret);
+++    amxc_var_set_type(&netdev_args, AMXC_VAR_ID_HTABLE);
+++
+++    amxc_var_add_key(cstring_t, &netdev_args, "IPAddress", ip_addr);
+++    amxc_var_add_key(uint32_t, &netdev_args, "PrefixLen", prefixlen);
+++    amxc_var_add_key(bool, &netdev_args, "IPv4", ipv4);
+++    //call to add or delete IP
+++    rv = amxb_call(ctx, amxc_string_get(&obj_string, 0), method, &netdev_args, ret, 3);
+++    when_failed_trace(rv, exit, ERROR, "Failed to call '%s' on '%s', error '%d'", method, amxc_string_get(&obj_string, 0), rv);
+++
+++exit:
+++    amxc_var_clean(&netdev_args);
+++    amxc_string_clean(&obj_string);
+++    SAH_TRACEZ_OUT(ME);
+++    return rv;
+++}
+++//AutoIp related changes -END
++--
++2.34.1
++
+--
+2.34.1
+
