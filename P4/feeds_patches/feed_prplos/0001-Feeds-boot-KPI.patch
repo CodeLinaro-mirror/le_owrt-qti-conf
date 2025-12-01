@@ -1,34 +1,36 @@
-From 418c792f6cd78e052302d141f8ddb6e22fe6cd4d Mon Sep 17 00:00:00 2001
+From 2726bcf1cd0d3e373813b9334cc71a58fb1a037d Mon Sep 17 00:00:00 2001
 From: Nazerin N <nazen@qti.qualcomm.com>
-Date: Tue, 19 Aug 2025 23:16:25 +0530
-Subject: [PATCH] Feeds ETH KPI
+Date: Wed, 17 Sep 2025 16:43:43 +0530
+Subject: [PATCH] Feeds boot KPI
 
 ---
- 0001-Boot-KPI-in-build.patch | 383 +++++++++++++++++++++++++++++++++++
- 1 file changed, 383 insertions(+)
- create mode 100644 0001-Boot-KPI-in-build.patch
+ .../patches/0001-Build-boot-KPI.patch         | 380 ++++++++++++++++++
+ 1 file changed, 380 insertions(+)
+ create mode 100644 net_core/plugins/netdev-plugin/patches/0001-Build-boot-KPI.patch
 
-diff --git a/0001-Boot-KPI-in-build.patch b/0001-Boot-KPI-in-build.patch
+diff --git a/net_core/plugins/netdev-plugin/patches/0001-Build-boot-KPI.patch b/net_core/plugins/netdev-plugin/patches/0001-Build-boot-KPI.patch
 new file mode 100644
-index 0000000..821051d
+index 0000000..74d0bd4
 --- /dev/null
-+++ b/0001-Boot-KPI-in-build.patch
-@@ -0,0 +1,383 @@
-+#This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
-+#Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
-+#SPDX-License-Identifier: BSD-3-Clause-Clear
++++ b/net_core/plugins/netdev-plugin/patches/0001-Build-boot-KPI.patch
+@@ -0,0 +1,380 @@
++This patch file is from Qualcomm Innovation Center, Inc. and
++is provided under the following license:
++Copyright (c) 2025 Qualcomm Innovation Center, Inc.
++All rights reserved.
++SPDX-License-Identifier: BSD-3-Clause-Clear
 +
-+From d37c84ba38e848749f1a08b85b4033e20f9eeb4d Mon Sep 17 00:00:00 2001
++From e677e88fa406119cb8661098195dca566ad74aa9 Mon Sep 17 00:00:00 2001
 +From: Nazerin N <nazen@qti.qualcomm.com>
-+Date: Tue, 19 Aug 2025 16:48:06 +0530
-+Subject: [PATCH] Boot KPI in build
++Date: Wed, 17 Sep 2025 16:21:23 +0530
++Subject: [PATCH] Build boot KPI
 +
 +---
-+ src/dm_link_neigh.c | 326 ++++++++++++++++++++++++++++++++++++++++++++
-+ 1 file changed, 326 insertions(+)
++ src/dm_link_neigh.c | 325 ++++++++++++++++++++++++++++++++++++++++++++
++ 1 file changed, 325 insertions(+)
 +
 +diff --git a/src/dm_link_neigh.c b/src/dm_link_neigh.c
-+index 34f0f0a..2a9ae8f 100644
++index 34f0f0a..13b5259 100644
 +--- a/src/dm_link_neigh.c
 ++++ b/src/dm_link_neigh.c
 +@@ -71,8 +71,21 @@
@@ -56,7 +58,7 @@ index 0000000..821051d
 +@@ -366,6 +379,307 @@ exit:
 +     amxc_var_clean(&notification_data);
 + }
-+
++ 
 ++
 ++// Helper function to check if string is empty
 ++static inline bool string_empty(const char* str) {
@@ -68,7 +70,7 @@ index 0000000..821051d
 ++    if (!is_ethernet) {
 ++        return false;
 ++    }
-+
+++
 ++    switch (ip_family) {
 ++        case AF_INET:
 ++            return !eth_ipv4_kpi_marked;
@@ -387,13 +389,8 @@ index 0000000..821051d
 ++    }
 ++
 +     transaction = create_transaction_from_neigh(neigh, GET_BOOL(&var_deferred_data, "new_instance"));
-+
++ 
 +     deferred_trans_create(&deferred_trans, transaction, neigh);
-+@@ -619,3 +944,4 @@ amxd_status_t _neigh_destroy(amxd_object_t* object,
-+ exit:
-+     return status;
-+ }
-++
 +--
 +2.17.1
 +
