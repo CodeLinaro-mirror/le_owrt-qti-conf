@@ -39,6 +39,7 @@ function set_sectools_path(){
 
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
+	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/qmb415.mk;
 	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
@@ -87,6 +88,8 @@ function set_bazel_target(){
 	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx35" ]; then
 		bazel_based_target=0
 	elif [ "${1}" == "sdx85" ]; then
+		bazel_based_target=1
+	elif [ "${1}" == "qmb415" ]; then
 		bazel_based_target=1
 	fi
 }
@@ -139,7 +142,7 @@ function patch_openssl(){
 		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
 	fi
 
-	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] || [ "${1}" == "qmb415" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
 		OPENSSL_VERSION=3.0.10
 		cd $TOPDIR/package/libs
 		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
@@ -517,6 +520,12 @@ function configure(){
 		            TARGET=sdxkova.512
 		        fi
 		fi
+
+		if [ "${1}" == "qmb415" ]; then
+		        if [ "${2}" = "mbb" ]; then
+		            TARGET=taycan
+		        fi
+		fi
 	fi
 
 	# REQUIRED to maintain backward compatability for the cases of configure invocations with disable_kernel parameter
@@ -621,7 +630,7 @@ if [ ! -z "${TARGET_MACHINE}" ]; then
 ./scripts/feeds update -a || exit 1
 ./scripts/feeds install -a || exit 1
 
-if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ] || [ ${TARGET_MACHINE} == 'sdx85' ]; then
+if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ] || [ ${TARGET_MACHINE} == 'sdx85' ] || [ ${TARGET_MACHINE} == 'qmb415' ]; then
 	cp owrt-qti-conf/${TARGET_MACHINE}/mbb.config .config || exit 1
 fi
 
