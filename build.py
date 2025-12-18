@@ -56,7 +56,7 @@ args = parser.parse_args()
 valid_targets = ['sdx75', 'sdx35' , 'sdx85']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512', 'iot']
-valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'cpe-v1', 'mbb-min', 'mbb-512']
+valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'cpe-v1', 'cpe-min', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -352,6 +352,8 @@ def getKernelPlatform(target, profile):
             platform = 'sdxkova.prpl'
          elif profile == 'cpe-tarang':
             platform = 'sdxkova.cpe.tarang'
+         elif profile == 'cpe-min':
+            platform = 'sdxkova.cpe.min'
          elif profile == 'mbb-512':
             platform = 'sdxkova.512'
          else:
@@ -372,7 +374,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
    platform = getKernelPlatform(args.target,args.profile)
    # local build
    if args.automation == 'false':
-      if args.profile == 'mbb' or args.profile == 'mbb-min' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-v1' or args.profile == 'mbb-512' or args.profile == 'iot':
+      if args.profile == 'mbb' or args.profile == 'mbb-min' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-min' or args.profile == 'cpe-v1' or args.profile == 'mbb-512' or args.profile == 'iot':
         build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
       else:
          print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
@@ -385,7 +387,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
       build(args.profile)  # configure & build args.profile profile
    else:
    #automation
-       if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-v1' or args.profile == 'mbb-512' or args.profile == 'iot':
+       if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-min' or args.profile == 'cpe-v1' or args.profile == 'mbb-512' or args.profile == 'iot':
           set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
           build('recovery')
        else:
