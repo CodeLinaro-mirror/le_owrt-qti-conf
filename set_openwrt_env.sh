@@ -517,6 +517,9 @@ function configure(){
 		        if [ "${2}" = "cpe-tarang" ]; then
 		            TARGET=sdxkova.cpe.tarang
 		        fi
+			if [ "${2}" = "cpe-min" ]; then
+		            TARGET=sdxkova.cpe.min
+			fi
 		        if [ "${2}" = "mbb-512" ]; then
 		            TARGET=sdxkova.512
 		        fi
