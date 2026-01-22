@@ -76,7 +76,7 @@ function set_up_feeds(){
 		./scripts/feeds install -a -f -p qtigplv2 || return
 	fi
 
-	if [[ "${1}" == "sdx85" && "${2}" == "cpe-v1" ]]; then
+	if [[ ( "${1}" == "sdx85" && "${2}" == "cpe-v1" ) || ( -n "$PRPL_VERSION" && "${PRPL_VERSION%%.*}" == "4" ) ]]; then
 		# Adding pci and pcie support
 		sed -i '/^FEATURES:=/ {/pci/!{/pcie/! s/$/ pci pcie/}}' target/linux/${1}/Makefile || return
 		./scripts/feeds install -a -f -p qtiipqopen || return
@@ -180,6 +180,10 @@ verify_target_configuration(){
 	else
 		echo "ERROR: Incorrect target configuration, TARGET ${1} was not configured successfully; see logs/target/linux/${1}/dump.txt for details."
 		echo "If package group .mk file in sdx.mk is target specific, please move .mk include line in target/linux/${1}/profiles/${1}.mk"
+		if [ -f "$TOPDIR/logs/target/linux/${1}/dump.txt" ]; then
+			echo "---- Error Log ----"
+			cat "$TOPDIR/logs/target/linux/${1}/dump.txt"
+		fi
 		return 1
 	fi
 }
@@ -429,6 +433,7 @@ function configure(){
 		./scripts/feeds uninstall bash || return
 		./scripts/feeds uninstall xz || return
 		./scripts/feeds install -a -f -p qtigplv2 || return
+		./scripts/feeds install -a -f -p qtiipqopen || return
 		if [ "${PRPL_VERSION}" = "4.0" ]; then
 			patch_upstream_feeds ${1} ${2} || return 1
 		fi
@@ -512,6 +517,9 @@ function configure(){
 		        if [ "${2}" = "cpe-tarang" ]; then
 		            TARGET=sdxkova.cpe.tarang
 		        fi
+			if [ "${2}" = "cpe-min" ]; then
+		            TARGET=sdxkova.cpe.min
+			fi
 		        if [ "${2}" = "mbb-512" ]; then
 		            TARGET=sdxkova.512
 		        fi
