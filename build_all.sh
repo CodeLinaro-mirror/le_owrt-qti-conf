@@ -72,6 +72,23 @@ if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ]; then
 		make -j1 V=s
 		exit 1
 	fi
+else if [ "${1}" == "qmb415" ]; then
+	configure ${1} recovery ${3} disable_kernel || exit 1
+	make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
+
+	if [ "${2}" == "mbb" ]; then
+		configure ${1} ${2} ${3} disable_kernel || exit 1
+		make package/sign_abl/{clean,compile}
+	fi
+	make -j32
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		exit 1
+	fi
 else
 	configure ${1} recovery ${3} || exit 1
 	make -j32
