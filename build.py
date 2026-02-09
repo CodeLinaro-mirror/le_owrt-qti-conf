@@ -53,11 +53,12 @@ parser.add_argument('--bin_ddm', default='true', help='Generates BIN DDM info')
 args = parser.parse_args()
 
 # Validate the arguments
-valid_targets = ['sdx75', 'sdx35' , 'sdx85']
+valid_targets = ['sdx75', 'sdx35' , 'sdx85', 'qmb415']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512', 'iot']
 valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'cpe-v1', 'cpe-min', 'mbb-min', 'mbb-512']
 valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m']
+valid_profiles['qmb415'] = ['mbb']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
 valid_logging = ['false','true']
@@ -359,6 +360,12 @@ def getKernelPlatform(target, profile):
          else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+    elif target == 'qmb415':
+         if profile == 'mbb':
+            platform = 'taycan'
+         else:
+            print("Invalid profile '{}' for target '{}'".format(profile, target))
+            print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
     return platform
 
 prpl_version = get_prpl_version()
@@ -435,3 +442,34 @@ if args.target == 'sdx35':
             build_kw(args.profile)
         else:
             build(args.profile)
+
+# ------------------------ complete build sequence for qmb415 target ---------------------------------
+if args.target == 'qmb415':
+   platform = getKernelPlatform(args.target,args.profile)
+   # local build
+   if args.automation == 'false':
+      if args.profile == 'mbb':
+        build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
+      else:
+         print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+         print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+
+#       common build sequence for qmb415 profiles
+      make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
+      consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
+      build('recovery')  # configure & build recovery profile
+      build(args.profile)  # configure & build args.profile profile
+   else:
+   #automation
+       if args.profile == 'mbb':
+          set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
+          build('recovery')
+       else:
+           print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
+           print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
+       if args.kw == 'true':
+          build_kw(args.profile)
+       else:
+          build(args.profile)
+   if args.bin_ddm == 'true':
+      generate_bin_ddm(args.profile)
