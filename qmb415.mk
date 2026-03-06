@@ -13,7 +13,8 @@ include $(TOPDIR)/owrt-qti-bt/qtibt.mk
 #include $(TOPDIR)/owrt-qti-bt-prop/qtibtprop.mk
 include $(TOPDIR)/owrt-qti-wlan/qtiwlan.mk
 include $(TOPDIR)/owrt-qti-wlan-prop/qtiwlanprop.mk
-#include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
+include $(TOPDIR)/owrt-qti-audio/qtiaudio.mk
+include $(TOPDIR)/owrt-qti-audio-algos/qtiaudioalgos.mk
 
 include $(TOPDIR)/owrt-qti-security/qtisecurity.mk
 include $(TOPDIR)/owrt-qti-security-prop/qtisecurityprop.mk
