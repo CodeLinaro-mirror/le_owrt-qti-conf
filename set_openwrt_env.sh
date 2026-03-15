@@ -19,7 +19,20 @@ fi
 
 function feeds_conf_path(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
-        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+
+	src_dir="$TOPDIR/owrt-qti-conf/P4/${1}"
+	src_profile="$src_dir/feeds_${2}.conf"
+	src_default="$src_dir/feeds.conf"
+
+	if [ -f "$src_profile" ]; then
+		/bin/cp "$src_profile" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_profile'"; return 1; }
+	elif [ -f "$src_default" ]; then
+		/bin/cp "$src_default" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_default'"; return 1; }
+	else
+		echo "ERROR: Neither '$src_profile' nor '$src_default' exists"
+		return 1
+	fi
+
 	fi
 }
 
@@ -426,7 +439,7 @@ function configure(){
 		fi
 	done
 
-	feeds_conf_path ${1} || return 1
+	feeds_conf_path ${1} ${2} || return 1
 	set_up_feeds ${1} ${2} || return 1
 	rm -rf .config
 	rm -rf tmp
@@ -455,7 +468,7 @@ function configure(){
 			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
 		else
-			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/${2}"\"
 		fi
 		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
