@@ -378,8 +378,8 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-
-	if [ "${2}" != "recovery" ]; then
+	# Do not run gen_config for recovery and initramfs profile
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
@@ -460,8 +460,8 @@ function configure(){
 	fi
 	patch_openssl ${1} || return 1
 
-	#Create separate rootfs for recovery profile
-	if [ "${2}" == "recovery" ]; then
+	#Create separate rootfs for recovery and initramfs profile
+	if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
 		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		if [ "${1}" == "sdx35" ]; then

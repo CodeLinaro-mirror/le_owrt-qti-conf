@@ -382,7 +382,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
    # local build
    if args.automation == 'false':
       if args.profile == 'mbb' or args.profile == 'mbb-min' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-min' or args.profile == 'cpe-v1' or args.profile == 'mbb-512' or args.profile == 'iot':
-        build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
+         build_kernel_platform(args.target, platform, args.variant)  # build kernel with the configured kernel platform
       else:
          print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
          print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
@@ -391,6 +391,10 @@ if args.target == 'sdx75' or args.target == 'sdx85':
       make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
       consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
       build('recovery')  # configure & build recovery profile
+      if prpl_version:
+       if args.target == 'sdx85':
+          build('initramfs')
+
       build(args.profile)  # configure & build args.profile profile
    else:
    #automation
@@ -406,6 +410,9 @@ if args.target == 'sdx75' or args.target == 'sdx85':
        if args.kw == 'true':
           build_kw(args.profile)
        else:
+          if prpl_version:
+             if args.target == 'sdx85':
+                build('initramfs')
           build(args.profile)
    if args.bin_ddm == 'true':
       generate_bin_ddm(args.profile) 
