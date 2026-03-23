@@ -472,7 +472,7 @@ function configure(){
 
 	if [ "${1}" == "sdx35" ]; then
 		BUILD_WITH_MEMOPT=0
-		if [ "${2}" == "mbb" ]; then
+		if [ "${2}" == "mbb" || "${2}" = "iot" ]; then
 			TARGET=sdxbaagha
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
