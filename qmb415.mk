@@ -20,6 +20,9 @@ include $(TOPDIR)/owrt-qti-security/qtisecurity.mk
 include $(TOPDIR)/owrt-qti-security-prop/qtisecurityprop.mk
 include $(TOPDIR)/owrt-qti-ssdk/qtissdk.mk
 
+include $(TOPDIR)/owrt-qti-dsp/qtidsp.mk
+include $(TOPDIR)/owrt-qti-dsp-prop/qtidspprop.mk
+
 # include mk files available only in internal builds
 ifneq ($(EXTERNAL_BUILD),1)
 #	include $(TOPDIR)/owrt-qti-location-internal/qtilocationinternal.mk
