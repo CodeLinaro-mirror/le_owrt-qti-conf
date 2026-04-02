@@ -423,7 +423,7 @@ if args.target == 'sdx35':
         # local build
         if args.profile == 'mbb' or args.profile == 'm2':
             build_kernel_platform(args.target, 'sdxbaagha', args.variant)  # build kernel with sdxbaagha configuration
-        if args.profile == 'iot':
+        elif args.profile == 'iot':
             build_kernel_platform(args.target, 'sdxbaagha-iot', args.variant)  # build kernel with sdxbaagha configuration
         elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             build_kernel_platform(args.target, 'sdxbaagha-128m', args.variant)  # build kernel with sdxbaagha-128m configuration
@@ -441,8 +441,8 @@ if args.target == 'sdx35':
         if args.profile == 'mbb' or args.profile == 'm2':
             set_kernel_target(args.target, 'sdxbaagha', args.variant)  # set kernel target for sdxbaagha configuration
             build('recovery')
-        if args.profile == 'iot':
-            build_kernel_platform(args.target, 'sdxbaagha-iot', args.variant)  # build kernel with sdxbaagha configuration
+        elif args.profile == 'iot':
+            set_kernel_target(args.target, 'sdxbaagha-iot', args.variant)  # set kernel target for sdxbaagha-iot configuration
             build('recovery')
         elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             set_kernel_target(args.target, 'sdxbaagha-128m', args.variant)  # set kernel target for sdxbaagha-128m configuration
