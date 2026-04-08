@@ -487,6 +487,10 @@ function configure(){
 		BUILD_WITH_MEMOPT=0
 		if [ "${2}" == "mbb" || "${2}" == "iot" ]; then
 			TARGET=sdxbaagha
+		elif [ "${2}" == "iot" ]; then
+			TARGET=sdxbaagha-iot
+		elif [ "${2}" == "mbb-nbntn" ]; then
+			TARGET=sdxbaagha-nbntn
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
 			TARGET=sdxbaagha-128m
