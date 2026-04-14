@@ -485,8 +485,10 @@ function configure(){
 
 	if [ "${1}" == "sdx35" ]; then
 		BUILD_WITH_MEMOPT=0
-		if [ "${2}" == "mbb" || "${2}" == "iot" ]; then
+		if [ "${2}" == "mbb" ]; then
 			TARGET=sdxbaagha
+		elif [ "${2}" == "iot" ]; then
+			TARGET=sdxbaagha-iot
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
 			TARGET=sdxbaagha-128m
@@ -630,6 +632,24 @@ function build-sdxbaagha-m2-perf-image(){
 	fi
 }
 
+function build-sdxbaagha-iot-image(){
+    configure sdx35 iot debug
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
+function build-sdxbaagha-iot-perf-image(){
+    configure sdx35 iot perf
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
 function build-all-sdxbaagha-images(){
     make dirclean
     build-sdxbaagha-image
@@ -643,6 +663,10 @@ function build-all-sdxbaagha-images(){
     build-sdxbaagha-m2-image
     make dirclean
     build-sdxbaagha-m2-perf-image
+    make dirclean
+    build-sdxbaagha-iot-image
+    make dirclean
+    build-sdxbaagha-iot-perf-image
 }
 
 if [ ! -z "${TARGET_MACHINE}" ]; then
