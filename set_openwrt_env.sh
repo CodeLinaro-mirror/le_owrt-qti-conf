@@ -19,7 +19,20 @@ fi
 
 function feeds_conf_path(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
-        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+
+	src_dir="$TOPDIR/owrt-qti-conf/P4/${1}"
+	src_profile="$src_dir/feeds_${2}.conf"
+	src_default="$src_dir/feeds.conf"
+
+	if [ -f "$src_profile" ]; then
+		/bin/cp "$src_profile" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_profile'"; return 1; }
+	elif [ -f "$src_default" ]; then
+		/bin/cp "$src_default" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_default'"; return 1; }
+	else
+		echo "ERROR: Neither '$src_profile' nor '$src_default' exists"
+		return 1
+	fi
+
 	fi
 }
 
@@ -365,8 +378,8 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-
-	if [ "${2}" != "recovery" ]; then
+	# Do not run gen_config for recovery and initramfs profile
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
@@ -426,7 +439,7 @@ function configure(){
 		fi
 	done
 
-	feeds_conf_path ${1} || return 1
+	feeds_conf_path ${1} ${2} || return 1
 	set_up_feeds ${1} ${2} || return 1
 	rm -rf .config
 	rm -rf tmp
@@ -447,15 +460,15 @@ function configure(){
 	fi
 	patch_openssl ${1} || return 1
 
-	#Create separate rootfs for recovery profile
-	if [ "${2}" == "recovery" ]; then
+	#Create separate rootfs for recovery and initramfs profile
+	if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
 		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		if [ "${1}" == "sdx35" ]; then
 			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
 		else
-			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/${2}"\"
 		fi
 		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
@@ -472,7 +485,7 @@ function configure(){
 
 	if [ "${1}" == "sdx35" ]; then
 		BUILD_WITH_MEMOPT=0
-		if [ "${2}" == "mbb" || "${2}" = "iot" ]; then
+		if [ "${2}" == "mbb" || "${2}" == "iot" ]; then
 			TARGET=sdxbaagha
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
