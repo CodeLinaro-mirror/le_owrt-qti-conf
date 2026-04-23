@@ -19,7 +19,20 @@ fi
 
 function feeds_conf_path(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
-        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+
+	src_dir="$TOPDIR/owrt-qti-conf/P4/${1}"
+	src_profile="$src_dir/feeds_${2}.conf"
+	src_default="$src_dir/feeds.conf"
+
+	if [ -f "$src_profile" ]; then
+		/bin/cp "$src_profile" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_profile'"; return 1; }
+	elif [ -f "$src_default" ]; then
+		/bin/cp "$src_default" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_default'"; return 1; }
+	else
+		echo "ERROR: Neither '$src_profile' nor '$src_default' exists"
+		return 1
+	fi
+
 	fi
 }
 
@@ -39,6 +52,7 @@ function set_sectools_path(){
 
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
+	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/qmb415.mk;
 	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
@@ -87,6 +101,8 @@ function set_bazel_target(){
 	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx35" ]; then
 		bazel_based_target=0
 	elif [ "${1}" == "sdx85" ]; then
+		bazel_based_target=1
+	elif [ "${1}" == "qmb415" ]; then
 		bazel_based_target=1
 	fi
 }
@@ -139,7 +155,7 @@ function patch_openssl(){
 		OPENSSL_VERSION=$(sed -n -e '/PKG_BASE:/ s/.*= *//p' "$TOPDIR/package/libs/openssl/Makefile")
 	fi
 
-	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
+	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx85" ] || [ "${1}" == "qmb415" ] && [ "${OPENSSL_VERSION%%.*}" != "3" ]; then
 		OPENSSL_VERSION=3.0.10
 		cd $TOPDIR/package/libs
 		git am $TOPDIR/owrt-qti-conf/feeds_patches/package/libs/opensslv3.patch
@@ -362,8 +378,8 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-
-	if [ "${2}" != "recovery" ]; then
+	# Do not run gen_config for recovery and initramfs profile
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
@@ -423,7 +439,7 @@ function configure(){
 		fi
 	done
 
-	feeds_conf_path ${1} || return 1
+	feeds_conf_path ${1} ${2} || return 1
 	set_up_feeds ${1} ${2} || return 1
 	rm -rf .config
 	rm -rf tmp
@@ -444,15 +460,15 @@ function configure(){
 	fi
 	patch_openssl ${1} || return 1
 
-	#Create separate rootfs for recovery profile
-	if [ "${2}" == "recovery" ]; then
+	#Create separate rootfs for recovery and initramfs profile
+	if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
 		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		if [ "${1}" == "sdx35" ]; then
 			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
 		else
-			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/${2}"\"
 		fi
 		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
@@ -469,7 +485,7 @@ function configure(){
 
 	if [ "${1}" == "sdx35" ]; then
 		BUILD_WITH_MEMOPT=0
-		if [ "${2}" == "mbb" ]; then
+		if [ "${2}" == "mbb" || "${2}" == "iot" ]; then
 			TARGET=sdxbaagha
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
@@ -517,8 +533,17 @@ function configure(){
 		        if [ "${2}" = "cpe-tarang" ]; then
 		            TARGET=sdxkova.cpe.tarang
 		        fi
+			if [ "${2}" = "cpe-min" ]; then
+		            TARGET=sdxkova.cpe.min
+			fi
 		        if [ "${2}" = "mbb-512" ]; then
 		            TARGET=sdxkova.512
+		        fi
+		fi
+
+		if [ "${1}" == "qmb415" ]; then
+		        if [ "${2}" = "mbb" ]; then
+		            TARGET=taycan
 		        fi
 		fi
 	fi
@@ -625,7 +650,7 @@ if [ ! -z "${TARGET_MACHINE}" ]; then
 ./scripts/feeds update -a || exit 1
 ./scripts/feeds install -a || exit 1
 
-if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ] || [ ${TARGET_MACHINE} == 'sdx85' ]; then
+if [ ${TARGET_MACHINE} == 'sdx75' ] || [ ${TARGET_MACHINE} == 'sdx65' ] || [ ${TARGET_MACHINE} == 'sdx85' ] || [ ${TARGET_MACHINE} == 'qmb415' ]; then
 	cp owrt-qti-conf/${TARGET_MACHINE}/mbb.config .config || exit 1
 fi
 
