@@ -504,9 +504,12 @@ function configure(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )); then
 		if [ "${1}" == "sdx75" ]; then
 			TARGET=sdxpinn-prpl
-		fi
-		if [ "${1}" == "sdx85" ]; then
-			TARGET=sdxkova.prpl
+		elif [ "${1}" == "sdx85" ]; then
+			if [ "${2}" == "cpe" ]; then
+				TARGET=sdxkova.prpl
+			elif [ "${2}" == "cpe-min" ]; then
+				TARGET=sdxkova.prpl.min
+			fi
 		fi
 	else
 		if [ "${1}" == "sdx75" ]; then
