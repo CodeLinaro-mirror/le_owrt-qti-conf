@@ -393,6 +393,7 @@ function run_gen_config(){
 	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
+			rm -rf .feeds_state.json
 		else
 			./scripts/gen_config.py prpl cellular || return
 		fi
