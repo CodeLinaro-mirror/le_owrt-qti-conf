@@ -456,6 +456,7 @@ if args.target == 'sdx35':
             build('recovery')
         elif args.profile == 'iot':
             set_kernel_target(args.target, 'sdxbaagha-iot', args.variant)  # set kernel target for sdxbaagha-iot configuration
+            build('recovery')
         elif args.profile == 'mbb-nbntn':
             set_kernel_target(args.target, 'sdxbaagha-nbntn', args.variant)  # set kernel target for sdxbaagha-nbntn configuration
             build('recovery')

@@ -575,7 +575,7 @@ function configure(){
 	#NOTE:
 	# redundant logic for build.py usage; can be safely removed once transition to build.py is complete
 	# 	in build.py KERNEL_PLATFORM_TARGET & TARGET_VARIANT are set prior to any profile configuration
-	if [ "${2}" != "recovery" ]; then
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		set_kernel_target ${1} ${TARGET} ${3} || return 1
 	else
 		set_kernel_variant ${1} ${3} || return 1
