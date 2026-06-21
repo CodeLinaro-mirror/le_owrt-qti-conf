@@ -19,7 +19,20 @@ fi
 
 function feeds_conf_path(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )) ; then
-        	/bin/cp $TOPDIR/owrt-qti-conf/P4/${1}/feeds.conf $TOPDIR
+
+	src_dir="$TOPDIR/owrt-qti-conf/P4/${1}"
+	src_profile="$src_dir/feeds_${2}.conf"
+	src_default="$src_dir/feeds.conf"
+
+	if [ -f "$src_profile" ]; then
+		/bin/cp "$src_profile" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_profile'"; return 1; }
+	elif [ -f "$src_default" ]; then
+		/bin/cp "$src_default" "$TOPDIR/feeds.conf" || { echo "ERROR: Failed to copy '$src_default'"; return 1; }
+	else
+		echo "ERROR: Neither '$src_profile' nor '$src_default' exists"
+		return 1
+	fi
+
 	fi
 }
 
@@ -77,13 +90,24 @@ function set_up_feeds(){
 		./scripts/feeds install -a -f -p qtigplv2 || return
 	fi
 
-	if [[ ( "${1}" == "sdx85" && "${2}" == "cpe-v1" ) || ( -n "$PRPL_VERSION" && "${PRPL_VERSION%%.*}" == "4" ) ]]; then
+	if [[ ( "${1}" == "sdx85" && "${2}" == "cpe-v1" ) ]]; then
 		# Adding pci and pcie support
 		sed -i '/^FEATURES:=/ {/pci/!{/pcie/! s/$/ pci pcie/}}' target/linux/${1}/Makefile || return
 		./scripts/feeds install -a -f -p qtiipqopen || return
 	fi
 }
 
+function set_up_feeds_prpl() {
+	# Adding pci and pcie support
+	sed -i '/^FEATURES:=/ {/pci/!{/pcie/! s/$/ pci pcie/}}' target/linux/${1}/Makefile || return
+	./scripts/feeds uninstall bash || return
+	./scripts/feeds uninstall xz || return
+	./scripts/feeds install -a -f -p qtigplv2 || return
+	./scripts/feeds install -a -f -p qtiipqopen || return
+	if [ "${PRPL_VERSION}" = "4.0" ]; then
+		patch_upstream_feeds ${1} ${2} || return 1
+	fi
+}
 function set_bazel_target(){
 	if [ "${1}" == "sdx75" ] || [ "${1}" == "sdx35" ]; then
 		bazel_based_target=0
@@ -365,13 +389,17 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-
-	if [ "${2}" != "recovery" ]; then
+	# Do not run gen_config for recovery and initramfs profile
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
 		else
 			./scripts/gen_config.py prpl cellular || return
 		fi
+	else
+		if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
+        		./scripts/gen_config.py ${1}_${2} || return
+        	fi
 	fi
 }
 
@@ -426,36 +454,29 @@ function configure(){
 		fi
 	done
 
-	feeds_conf_path ${1} || return 1
-	set_up_feeds ${1} ${2} || return 1
-	rm -rf .config
-	rm -rf tmp
+	feeds_conf_path ${1} ${2} || return 1
 	if [ -n "${PRPL_VERSION}" ]; then
-		cp owrt-qti-conf/P4/${1}/${2}.config .config || return
 		run_gen_config ${1} ${2} || return
-		./scripts/feeds uninstall bash || return
-		./scripts/feeds uninstall xz || return
-		./scripts/feeds install -a -f -p qtigplv2 || return
-		./scripts/feeds install -a -f -p qtiipqopen || return
-		if [ "${PRPL_VERSION}" = "4.0" ]; then
-			patch_upstream_feeds ${1} ${2} || return 1
-		fi
+		set_up_feeds_prpl ${1} ${2} || return 1
 	else
+		set_up_feeds ${1} ${2} || return 1
+		rm -rf .config
+		rm -rf tmp
 		cp owrt-qti-conf/${1}/${2}.config .config || return
 		update_configs ${1} ${2} || return
 		patch_upstream_feeds ${1} ${2} || return 1
 	fi
 	patch_openssl ${1} || return 1
 
-	#Create separate rootfs for recovery profile
-	if [ "${2}" == "recovery" ]; then
+	#Create separate rootfs for recovery and initramfs profile
+	if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
 		ARCH=$(sed -n -e '/ARCH:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		CPU=$(sed -n -e '/CPU_TYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 		if [ "${1}" == "sdx35" ]; then
 			CPU_SUBTYPE=$(sed -n -e '/CPU_SUBTYPE:/ s/.*= *//p' "target/linux/${1}/Makefile")
 			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"+"${CPU_SUBTYPE}"_musl_eabi/recovery"\"
 		else
-			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/recovery"\"
+			BUILD_DIR_CONFIG="CONFIG_TARGET_ROOTFS_DIR="\"$TOPDIR"/build_dir/target-"${ARCH}"_"${CPU}"_musl/${2}"\"
 		fi
 		sed -i '$a'"$BUILD_DIR_CONFIG"'' .config
 	fi
@@ -474,6 +495,10 @@ function configure(){
 		BUILD_WITH_MEMOPT=0
 		if [ "${2}" == "mbb" ]; then
 			TARGET=sdxbaagha
+		elif [ "${2}" == "iot" ]; then
+			TARGET=sdxbaagha-iot
+		elif [ "${2}" == "mbb-nbntn" ]; then
+			TARGET=sdxbaagha-nbntn
 		elif [ "${2}" == "mbb-128m" ] || [ "${2}" == "m2-128m" ]; then
 			BUILD_WITH_MEMOPT=1
 			TARGET=sdxbaagha-128m
@@ -487,9 +512,12 @@ function configure(){
 	if [ -n "${PRPL_VERSION}" ] && (( "${PRPL_VERSION%%.*}"=="4" )); then
 		if [ "${1}" == "sdx75" ]; then
 			TARGET=sdxpinn-prpl
-		fi
-		if [ "${1}" == "sdx85" ]; then
-			TARGET=sdxkova.prpl
+		elif [ "${1}" == "sdx85" ]; then
+			if [ "${2}" == "cpe" ]; then
+				TARGET=sdxkova.prpl
+			elif [ "${2}" == "cpe-min" ]; then
+				TARGET=sdxkova.prpl.min
+			fi
 		fi
 	else
 		if [ "${1}" == "sdx75" ]; then
@@ -547,7 +575,7 @@ function configure(){
 	#NOTE:
 	# redundant logic for build.py usage; can be safely removed once transition to build.py is complete
 	# 	in build.py KERNEL_PLATFORM_TARGET & TARGET_VARIANT are set prior to any profile configuration
-	if [ "${2}" != "recovery" ]; then
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		set_kernel_target ${1} ${TARGET} ${3} || return 1
 	else
 		set_kernel_variant ${1} ${3} || return 1
@@ -617,6 +645,24 @@ function build-sdxbaagha-m2-perf-image(){
 	fi
 }
 
+function build-sdxbaagha-iot-image(){
+    configure sdx35 iot debug
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
+function build-sdxbaagha-iot-perf-image(){
+    configure sdx35 iot perf
+    make -j$(nproc)
+	if [ $? -ne 0 ]; then
+		make -j1 V=s
+		return 1
+	fi
+}
+
 function build-all-sdxbaagha-images(){
     make dirclean
     build-sdxbaagha-image
@@ -630,6 +676,10 @@ function build-all-sdxbaagha-images(){
     build-sdxbaagha-m2-image
     make dirclean
     build-sdxbaagha-m2-perf-image
+    make dirclean
+    build-sdxbaagha-iot-image
+    make dirclean
+    build-sdxbaagha-iot-perf-image
 }
 
 if [ ! -z "${TARGET_MACHINE}" ]; then
