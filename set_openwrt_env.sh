@@ -12,6 +12,23 @@ echo ${PRPL_VERSION}
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
+PRPLWRT_PROFILE_DIR="${TOPDIR}/profiles"
+QC_PROFILE_DIR="${TOPDIR}/owrt-qti-bsp/profiles"
+
+if [ -n "${PRPL_VERSION}" ]; then
+    if [ -n "${GENCONFIG_PROFILE_DIRS}" ]; then
+        # Check both dirs to avoid duplicates on re-source
+        _add_prpl=1
+        _add_qc=1
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${PRPLWRT_PROFILE_DIR}:"* ]] && _add_prpl=0
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${QC_PROFILE_DIR}:"* ]] && _add_qc=0
+        [ "${_add_prpl}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${GENCONFIG_PROFILE_DIRS}"
+        [ "${_add_qc}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${GENCONFIG_PROFILE_DIRS}:${QC_PROFILE_DIR}"
+    else
+        export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${QC_PROFILE_DIR}"
+    fi
+fi
+
 bazel_based_target=0
 if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
         /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
@@ -389,18 +406,19 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-	# Do not run gen_config for recovery and initramfs profile
-	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
-		if [ -f "profiles/${1}_${2}.yml" ]; then
-			./scripts/gen_config.py ${1}_${2} prpl cellular || return
-			rm -rf .feeds_state.json
-		else
-			./scripts/gen_config.py prpl cellular || return
-		fi
+
+# additional profiles can be included in the .yml if required
+# eg:in .yml following lines includes prpl and cellular profiles
+
+#include:
+#  - prpl
+#  - cellular
+
+	if [ -f "${QC_PROFILE_DIR}/${1}_${2}.yml" ]; then
+		./scripts/gen_config.py ${1}_${2} || return
+		rm -rf .feeds_state.json
 	else
-		if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
-        		./scripts/gen_config.py ${1}_${2} || return
-        	fi
+		./scripts/gen_config.py prpl cellular || return
 	fi
 }
 
