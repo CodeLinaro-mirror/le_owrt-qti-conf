@@ -329,9 +329,17 @@ def getKernelPlatform(target, profile):
        if target == 'sdx75':
           platform = 'sdxpinn-prpl'
        elif target == 'sdx85':
-           platform = 'sdxkova.prpl'
+           if profile == 'cpe':
+               platform = 'sdxkova.prpl'
+           elif profile == 'cpe-min':
+               platform = 'sdxkova.prpl.min'
+           else:
+               print("Invalid profile '{}' for target '{}'".format(profile, target))
+               print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[target])))
+               exit(1)
        else:
            print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
+           exit(1)
     elif target == 'sdx75':
         if profile == 'mbb' or profile == 'mbb-min' or profile == 'iot':
             platform = 'sdxpinn'
@@ -344,6 +352,7 @@ def getKernelPlatform(target, profile):
         else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     elif target == 'sdx85':
          if profile == 'mbb' or profile == 'mbb-min':
             platform = 'sdxkova'
@@ -360,12 +369,14 @@ def getKernelPlatform(target, profile):
          else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     elif target == 'qmb415':
          if profile == 'mbb':
             platform = 'taycan'
          else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     return platform
 
 prpl_version = get_prpl_version()
@@ -445,6 +456,9 @@ if args.target == 'sdx35':
             build('recovery')
         elif args.profile == 'iot':
             set_kernel_target(args.target, 'sdxbaagha-iot', args.variant)  # set kernel target for sdxbaagha-iot configuration
+        elif args.profile == 'mbb-nbntn':
+            set_kernel_target(args.target, 'sdxbaagha-nbntn', args.variant)  # set kernel target for sdxbaagha-nbntn configuration
+            build('recovery')
         elif args.profile == 'mbb-nbntn':
             set_kernel_target(args.target, 'sdxbaagha-nbntn', args.variant)  # set kernel target for sdxbaagha-nbntn configuration
             build('recovery')
