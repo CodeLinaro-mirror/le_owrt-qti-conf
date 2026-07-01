@@ -57,7 +57,7 @@ valid_targets = ['sdx75', 'sdx35' , 'sdx85', 'qmb415']
 valid_profiles = {}
 valid_profiles['sdx75'] = ['mbb', 'cpe', 'cpe-v1', 'mbb-min', 'mbb-512', 'iot']
 valid_profiles['sdx85'] = ['mbb', 'cpe', 'cpe-tarang', 'cpe-v1', 'cpe-min', 'mbb-min', 'mbb-512']
-valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m', 'iot']
+valid_profiles['sdx35'] = ['mbb', 'mbb-128m', 'm2', 'm2-128m', 'iot','mbb-nbntn']
 valid_profiles['qmb415'] = ['mbb']
 valid_variants = ['debug', 'perf', 'user']
 valid_automation_flags = ['false', 'true']
@@ -329,9 +329,17 @@ def getKernelPlatform(target, profile):
        if target == 'sdx75':
           platform = 'sdxpinn-prpl'
        elif target == 'sdx85':
-           platform = 'sdxkova.prpl'
+           if profile == 'cpe':
+               platform = 'sdxkova.prpl'
+           elif profile == 'cpe-min':
+               platform = 'sdxkova.prpl.min'
+           else:
+               print("Invalid profile '{}' for target '{}'".format(profile, target))
+               print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[target])))
+               exit(1)
        else:
            print("Invalid target '{}'. Valid targets are: {}".format(args.target, ', '.join(valid_targets)))
+           exit(1)
     elif target == 'sdx75':
         if profile == 'mbb' or profile == 'mbb-min' or profile == 'iot':
             platform = 'sdxpinn'
@@ -344,6 +352,7 @@ def getKernelPlatform(target, profile):
         else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     elif target == 'sdx85':
          if profile == 'mbb' or profile == 'mbb-min':
             platform = 'sdxkova'
@@ -360,12 +369,14 @@ def getKernelPlatform(target, profile):
          else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     elif target == 'qmb415':
          if profile == 'mbb':
             platform = 'taycan'
          else:
             print("Invalid profile '{}' for target '{}'".format(profile, target))
             print("Valid profiles for '{}' target are: {}".format(target, ', '.join(valid_profiles[args.target])))
+            exit(1)
     return platform
 
 prpl_version = get_prpl_version()
@@ -425,6 +436,8 @@ if args.target == 'sdx35':
             build_kernel_platform(args.target, 'sdxbaagha', args.variant)  # build kernel with sdxbaagha configuration
         elif args.profile == 'iot':
             build_kernel_platform(args.target, 'sdxbaagha-iot', args.variant)  # build kernel with sdxbaagha configuration
+        elif args.profile == 'mbb-nbntn':
+            build_kernel_platform(args.target, 'sdxbaagha-nbntn', args.variant)  # build kernel with sdxbaagha-nbntn configuration
         elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             build_kernel_platform(args.target, 'sdxbaagha-128m', args.variant)  # build kernel with sdxbaagha-128m configuration
         else:
@@ -443,6 +456,9 @@ if args.target == 'sdx35':
             build('recovery')
         elif args.profile == 'iot':
             set_kernel_target(args.target, 'sdxbaagha-iot', args.variant)  # set kernel target for sdxbaagha-iot configuration
+            build('recovery')
+        elif args.profile == 'mbb-nbntn':
+            set_kernel_target(args.target, 'sdxbaagha-nbntn', args.variant)  # set kernel target for sdxbaagha-nbntn configuration
             build('recovery')
         elif args.profile == 'mbb-128m' or args.profile == 'm2-128m':
             set_kernel_target(args.target, 'sdxbaagha-128m', args.variant)  # set kernel target for sdxbaagha-128m configuration
