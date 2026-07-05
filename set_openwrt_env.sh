@@ -528,7 +528,7 @@ function configure(){
 			if [ "${2}" = "cpe" ]; then
 				TARGET=sdxpinn-cpe-wkk
 			fi
-			if [ "${2}" = "cpe-v1" ]; then
+			if [ "${2}" = "cpe-v1" ] || [ "${2}" = "cpe-v1-min" ]; then
 				TARGET=sdxpinn-cpe-wkk-v1
 			fi
 			if [ "${2}" = "mbb-512" ]; then
