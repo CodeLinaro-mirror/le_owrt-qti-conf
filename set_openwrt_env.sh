@@ -393,6 +393,7 @@ function run_gen_config(){
 	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		if [ -f "profiles/${1}_${2}.yml" ]; then
 			./scripts/gen_config.py ${1}_${2} prpl cellular || return
+			rm -rf .feeds_state.json
 		else
 			./scripts/gen_config.py prpl cellular || return
 		fi
@@ -527,7 +528,7 @@ function configure(){
 			if [ "${2}" = "cpe" ]; then
 				TARGET=sdxpinn-cpe-wkk
 			fi
-			if [ "${2}" = "cpe-v1" ]; then
+			if [ "${2}" = "cpe-v1" ] || [ "${2}" = "cpe-v1-min" ]; then
 				TARGET=sdxpinn-cpe-wkk-v1
 			fi
 			if [ "${2}" = "mbb-512" ]; then
@@ -575,7 +576,7 @@ function configure(){
 	#NOTE:
 	# redundant logic for build.py usage; can be safely removed once transition to build.py is complete
 	# 	in build.py KERNEL_PLATFORM_TARGET & TARGET_VARIANT are set prior to any profile configuration
-	if [ "${2}" != "recovery" ]; then
+	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
 		set_kernel_target ${1} ${TARGET} ${3} || return 1
 	else
 		set_kernel_variant ${1} ${3} || return 1
