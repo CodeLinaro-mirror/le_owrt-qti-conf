@@ -61,7 +61,14 @@ function set_sectools_path(){
                 echo "Please export SECTOOLS_PATH variable..."
                 return 1
         fi
-	sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" include/package.mk || return
+	for sec_path_file in rules.mk include/package.mk; do
+		grep -q "SEC_PATH:=" "$sec_path_file"
+		if [ $? -ne 0 ]; then
+			sed -i '1s|^|SEC_PATH:='"${SECTOOLS_PATH}"'\n|' "$sec_path_file" || return
+	else
+			sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" "$sec_path_file" || return
+	fi
+	done
 }
 
 ## Add mechanism to differentiate between internal & external build;
@@ -70,7 +77,6 @@ function set_sectools_path(){
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/qmb415.mk;
-	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
 	fi
@@ -82,6 +88,7 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY11;
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
+set_sectools_path || return
 
 function uname_version(){
 	KERNEL_VERSION=5.15
