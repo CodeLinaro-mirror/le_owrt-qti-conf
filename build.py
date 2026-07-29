@@ -262,8 +262,41 @@ def print_build_configuration(target, profile, variant):
 # If automation build (automation flag set as true)
 #   Re-trigger full build with make -j1 V=s for more verbose logs on the error
 
+# Setup secondary path for ccache
+# Local path is based on CONFIG_CCACHE_DIR 
+# if not set, it defaults to .ccache folder in TOPDIR
+def setup_ccache():
+    config_file_path = '{}/.config'.format(TOPDIR)
+    ccache_dir = None
+    ccache_enabled = False
+
+    try:
+        with open(config_file_path, 'r') as f:
+            for line in f:
+                if re.match(r'^CONFIG_CCACHE=y', line):
+                    ccache_enabled = True
+                match = re.match(r'^CONFIG_CCACHE_DIR="(.+)"', line)
+                if match:
+                    ccache_dir = match.group(1)
+    except FileNotFoundError:
+        return
+
+    if not ccache_enabled:
+        return
+
+    if not ccache_dir:
+        ccache_dir = os.path.join(TOPDIR, '.ccache')
+
+    os.makedirs(ccache_dir, exist_ok=True)
+    ccache_conf = os.path.join(ccache_dir, 'ccache.conf')
+    if not os.path.exists(ccache_conf):
+        with open(ccache_conf, 'w') as f:
+            f.write('secondary_storage = file:///prj/qct/quic/oe_filer_scratch/CCACHES/PRPL.PRODUCT.2.0|read-only=true\n')
+        print('ccache.conf created at: {}'.format(ccache_conf))
+
 def build(profile):
     configure(args.target, profile, args.variant)
+    setup_ccache()
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
         subprocess.run(['make', 'package/telux-lib/clean', 'package/telux-lib/compile'])
