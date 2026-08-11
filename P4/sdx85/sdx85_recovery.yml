@@ -1,0 +1,62 @@
+---
+profiles:
+  - SDX85_RECOVERY
+target: sdx85
+subtarget: recovery
+description: Build image for sdx85 board recovery profile
+
+additional_packages:
+  - feed: packages
+    packages:
+      - bind
+      - conntrack-tools
+      - file
+      - fping
+      - iperf3
+      - pciutils
+      - rng-tools
+      - lvm2
+      - usbutils
+
+packages:
+  - busybox
+  - procd
+  - procd-seccomp
+  - procd-ujail
+  - procd-ujail-console
+
+diffconfig: |
+  CONFIG_TARGET_ROOTFS_UBIFS=y
+  CONFIG_TARGET_ROOTFS_EXT4FS=y
+  CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+  CONFIG_DEVEL=y
+  CONFIG_ATH_USER_REGD=y
+  CONFIG_BUSYBOX_CUSTOM=y
+  CONFIG_BUSYBOX_CONFIG_TR=y
+  CONFIG_BUSYBOX_CONFIG_FEATURE_TR_CLASSES=y
+  CONFIG_BUSYBOX_CONFIG_PRINTENV=y
+  CONFIG_BUSYBOX_CONFIG_BUSYBOX=y
+  CONFIG_BUSYBOX_CONFIG_UNZIP=y
+  CONFIG_BUSYBOX_CONFIG_FEATURE_FIND_INUM=y
+  CONFIG_BUSYBOX_CONFIG_FEATURE_PREFER_APPLETS=y
+  CONFIG_BUSYBOX_CONFIG_NOHUP=y
+  CONFIG_BUSYBOX_CONFIG_FEATURE_SORT_BIG=y
+  CONFIG_TOOLCHAINOPTS=y
+  CONFIG_GCC_USE_VERSION_9=y
+  CONFIG_COLLECT_KERNEL_DEBUG=y
+  # CONFIG_LIBC_USE_UCLIBC is not set
+  CONFIG_PKG_FORTIFY_SOURCE_NONE=y
+  CONFIG_PKG_ASLR_PIE_ALL=y
+  CONFIG_PKG_CC_STACKPROTECTOR_STRONG=y
+  # CONFIG_TARGET_ROOTFS_INITRAMFS is not set
+  CONFIG_KERNEL_PERF_EVENTS=y
+  # prplOS branding
+  CONFIG_IMAGEOPT=y
+  CONFIG_VERSIONOPT=y
+  CONFIG_VERSION_DIST="prplOS"
+  CONFIG_VERSION_REPO="https://downloads.openwrt.org/releases/24.10-SNAPSHOT"
+  CONFIG_VERSION_HOME_URL="https://prplfoundation.org"
+  CONFIG_VERSION_MANUFACTURER="prpl Foundation"
+  CONFIG_VERSION_MANUFACTURER_URL="https://prplfoundation.org"
+  CONFIG_VERSION_BUG_URL="https://jira.prplfoundation.org"
+  CONFIG_VERSION_SUPPORT_URL="https://jira.prplfoundation.org"

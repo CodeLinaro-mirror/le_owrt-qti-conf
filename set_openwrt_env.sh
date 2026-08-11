@@ -6,6 +6,7 @@
 TOPDIR=$(pwd)
 PRPL_VERSION=$(sed -n -e 's/^PRPL_VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
+PRPL_MAJOR_VERSION="${PRPL_VERSION%%.*}"
 OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
 echo ${PRPL_VERSION}
@@ -13,21 +14,10 @@ echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
 PRPLWRT_PROFILE_DIR="${TOPDIR}/profiles"
-QC_PROFILE_DIR="${TOPDIR}/owrt-qti-bsp/profiles"
-
-if [ -n "${PRPL_VERSION}" ]; then
-    if [ -n "${GENCONFIG_PROFILE_DIRS}" ]; then
-        # Check both dirs to avoid duplicates on re-source
-        _add_prpl=1
-        _add_qc=1
-        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${PRPLWRT_PROFILE_DIR}:"* ]] && _add_prpl=0
-        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${QC_PROFILE_DIR}:"* ]] && _add_qc=0
-        [ "${_add_prpl}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${GENCONFIG_PROFILE_DIRS}"
-        [ "${_add_qc}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${GENCONFIG_PROFILE_DIRS}:${QC_PROFILE_DIR}"
-    else
-        export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${QC_PROFILE_DIR}"
-    fi
-fi
+# QC_PROFILE_DIR depends on the target, which is only known once configure/
+# run_gen_config are invoked, so it can no longer be set unconditionally here.
+# See set_qc_profile_dir(), called from run_gen_config() with the target.
+QC_PROFILE_DIR=""
 
 bazel_based_target=0
 if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
@@ -412,19 +402,70 @@ function build_kernel(){
 	cd $TOPDIR
 }
 
+# arguments: sdx_target
+# Sets QC_PROFILE_DIR based on PRPL major version and target, then (re)exports
+# GENCONFIG_PROFILE_DIRS so gen_config.py picks up the right profile dir.
+#   QC_PROFILE_DIR  -> ${TOPDIR}/owrt-qti-conf/P<major>/<target>
+function set_genconfig_profile_dirs(){
+
+    if [ -z "${1}" ]; then
+        echo "ERROR: Please provide target to set QC_PROFILE_DIR" && return 1
+    fi
+
+    if [ -n "${PRPL_VERSION}" ]; then
+        if [ -z "${PRPL_MAJOR_VERSION}" ]; then
+            echo "ERROR: PRPL_MAJOR_VERSION is empty, cannot construct QC_PROFILE_DIR" && return 1
+        fi
+        export QC_PROFILE_DIR="${TOPDIR}/owrt-qti-conf/P${PRPL_MAJOR_VERSION}/${1}"
+        if [ ! -d "${QC_PROFILE_DIR}" ]; then
+            echo "WARNING: Profile Dir: ${QC_PROFILE_DIR} not found, skipping QC profile dir"
+            QC_PROFILE_DIR=""
+        fi
+    fi
+
+	# append profile dirs paths to GENCONFIG_PROFILE_DIRS and seperate each path with ":" similar to $PATH
+	# if GENCONFIG_PROFILE_DIRS was not configured then;
+	# GENCONFIG_PROFILE_DIRS = "${TOPDIR}/profiles:${TOPDIR}/owrt-qti-conf/P<major>/<target>"
+	# but if GENCONFIG_PROFILE_DIRS was already configured we will do:
+	# GENCONFIG_PROFILE_DIRS = "${TOPDIR}/profiles:${GENCONFIG_PROFILE_DIRS}:${TOPDIR}/owrt-qti-conf/P<major>/<target>"
+	# avoid duplicate paths in GENCONFIG_PROFILE_DIRS
+
+    if [ -n "${GENCONFIG_PROFILE_DIRS}" ]; then
+        _add_prpl=1
+        _add_qc=1
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${PRPLWRT_PROFILE_DIR}:"* ]] && _add_prpl=0
+        [ -n "${QC_PROFILE_DIR}" ] && [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${QC_PROFILE_DIR}:"* ]] && _add_qc=0
+        [ "${_add_prpl}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${GENCONFIG_PROFILE_DIRS}"
+        [ "${_add_qc}" == "1" ] && [ -n "${QC_PROFILE_DIR}" ] && export GENCONFIG_PROFILE_DIRS="${GENCONFIG_PROFILE_DIRS}:${QC_PROFILE_DIR}"
+    else
+        if [ -n "${QC_PROFILE_DIR}" ]; then
+            export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${QC_PROFILE_DIR}"
+        else
+            export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}"
+        fi
+    fi
+}
+
+# arguments:
+#	${1} = target eg: sdx85,echo, etc.
+#	${2} = profile eg: cpe,perf etc.
 function run_gen_config(){
+	# run gen_config for all profiles
+	# SDX profiles to be passed as FINAL argument to gen_config.py to allow for CONFIG OVERRIDING.
+	# set_genconfig_profile_dirs to set QC_PROFILE_DIR as owrt-qti-conf/P<major>/<target>
 
-# additional profiles can be included in the .yml if required
-# eg:in .yml following lines includes prpl and cellular profiles
-
-#include:
-#  - prpl
-#  - cellular
+	set_genconfig_profile_dirs ${1} || return 1
 
 	if [ -f "${QC_PROFILE_DIR}/${1}_${2}.yml" ]; then
-		./scripts/gen_config.py ${1}_${2} || return
-		rm -rf .feeds_state.json
+		if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
+			./scripts/gen_config.py prpl cellular ${1}_${2} || return
+			rm -rf .feeds_state.json
+		else
+			./scripts/gen_config.py ${1}_${2} || return
+		fi
 	else
+		echo "profile for ${1}_${2} is not found"
+		echo "Building with generic prpl profiles"
 		./scripts/gen_config.py prpl cellular || return
 	fi
 }

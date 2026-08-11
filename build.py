@@ -380,6 +380,11 @@ def getKernelPlatform(target, profile):
     return platform
 
 prpl_version = get_prpl_version()
+
+# Enable verbose gen_config.py logging only for Prplos builds run
+if prpl_version and args.logging == 'true':
+    os.environ['GENCONFIG_VERBOSE'] = '1'
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 current_build_timestamp=int(time.time())
