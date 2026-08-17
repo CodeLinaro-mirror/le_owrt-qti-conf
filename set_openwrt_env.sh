@@ -12,6 +12,23 @@ echo ${PRPL_VERSION}
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
 
+PRPLWRT_PROFILE_DIR="${TOPDIR}/profiles"
+QC_PROFILE_DIR="${TOPDIR}/owrt-qti-bsp/profiles"
+
+if [ -n "${PRPL_VERSION}" ]; then
+    if [ -n "${GENCONFIG_PROFILE_DIRS}" ]; then
+        # Check both dirs to avoid duplicates on re-source
+        _add_prpl=1
+        _add_qc=1
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${PRPLWRT_PROFILE_DIR}:"* ]] && _add_prpl=0
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${QC_PROFILE_DIR}:"* ]] && _add_qc=0
+        [ "${_add_prpl}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${GENCONFIG_PROFILE_DIRS}"
+        [ "${_add_qc}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${GENCONFIG_PROFILE_DIRS}:${QC_PROFILE_DIR}"
+    else
+        export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${QC_PROFILE_DIR}"
+    fi
+fi
+
 bazel_based_target=0
 if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
         /bin/cp $TOPDIR/owrt-qti-conf/V${OWRT_VERSION%%.*}/feeds.conf $TOPDIR
@@ -44,7 +61,14 @@ function set_sectools_path(){
                 echo "Please export SECTOOLS_PATH variable..."
                 return 1
         fi
-	sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" include/package.mk || return
+	for sec_path_file in rules.mk include/package.mk; do
+		grep -q "SEC_PATH:=" "$sec_path_file"
+		if [ $? -ne 0 ]; then
+			sed -i '1s|^|SEC_PATH:='"${SECTOOLS_PATH}"'\n|' "$sec_path_file" || return
+	else
+			sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" "$sec_path_file" || return
+	fi
+	done
 }
 
 ## Add mechanism to differentiate between internal & external build;
@@ -53,7 +77,6 @@ function set_sectools_path(){
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/qmb415.mk;
-	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
 	fi
@@ -65,6 +88,7 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY11;
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
+set_sectools_path || return
 
 function uname_version(){
 	KERNEL_VERSION=5.15
@@ -389,17 +413,19 @@ function build_kernel(){
 }
 
 function run_gen_config(){
-	# Do not run gen_config for recovery and initramfs profile
-	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
-		if [ -f "profiles/${1}_${2}.yml" ]; then
-			./scripts/gen_config.py ${1}_${2} prpl cellular || return
-		else
-			./scripts/gen_config.py prpl cellular || return
-		fi
+
+# additional profiles can be included in the .yml if required
+# eg:in .yml following lines includes prpl and cellular profiles
+
+#include:
+#  - prpl
+#  - cellular
+
+	if [ -f "${QC_PROFILE_DIR}/${1}_${2}.yml" ]; then
+		./scripts/gen_config.py ${1}_${2} || return
+		rm -rf .feeds_state.json
 	else
-		if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
-        		./scripts/gen_config.py ${1}_${2} || return
-        	fi
+		./scripts/gen_config.py prpl cellular || return
 	fi
 }
 
@@ -527,7 +553,7 @@ function configure(){
 			if [ "${2}" = "cpe" ]; then
 				TARGET=sdxpinn-cpe-wkk
 			fi
-			if [ "${2}" = "cpe-v1" ]; then
+			if [ "${2}" = "cpe-v1" ] || [ "${2}" = "cpe-v1-min" ]; then
 				TARGET=sdxpinn-cpe-wkk-v1
 			fi
 			if [ "${2}" = "mbb-512" ]; then
