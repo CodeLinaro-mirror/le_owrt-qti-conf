@@ -6,11 +6,18 @@
 TOPDIR=$(pwd)
 PRPL_VERSION=$(sed -n -e 's/^PRPL_VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 PRPL_VERSION=$(echo $PRPL_VERSION | awk '{print $1}')
+PRPL_MAJOR_VERSION="${PRPL_VERSION%%.*}"
 OWRT_VERSION=$(sed -n -e 's/^VERSION_NUMBER:= *//p' "include/version.mk" | grep -oE '[0-9]+([.][0-9]+)?')
 OWRT_VERSION=$(echo $OWRT_VERSION | awk '{print $1}')
 echo ${PRPL_VERSION}
 echo ${OWRT_VERSION}
 /bin/cp $TOPDIR/owrt-qti-conf/feeds.conf $TOPDIR
+
+PRPLWRT_PROFILE_DIR="${TOPDIR}/profiles"
+# QC_PROFILE_DIR depends on the target, which is only known once configure/
+# run_gen_config are invoked, so it can no longer be set unconditionally here.
+# See set_qc_profile_dir(), called from run_gen_config() with the target.
+QC_PROFILE_DIR=""
 
 bazel_based_target=0
 if (( "${OWRT_VERSION%%.*}"=="23")) || (( "${OWRT_VERSION%%.*}"=="24")); then
@@ -44,7 +51,14 @@ function set_sectools_path(){
                 echo "Please export SECTOOLS_PATH variable..."
                 return 1
         fi
-	sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" include/package.mk || return
+	for sec_path_file in rules.mk include/package.mk; do
+		grep -q "SEC_PATH:=" "$sec_path_file"
+		if [ $? -ne 0 ]; then
+			sed -i '1s|^|SEC_PATH:='"${SECTOOLS_PATH}"'\n|' "$sec_path_file" || return
+	else
+			sed -i "s|SEC_PATH:=.*|SEC_PATH:=${SECTOOLS_PATH}|g" "$sec_path_file" || return
+	fi
+	done
 }
 
 ## Add mechanism to differentiate between internal & external build;
@@ -53,7 +67,6 @@ function set_sectools_path(){
 if [ ! -d owrt-qti-internal ]; then
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/sdx.mk;
 	sed -i '1s/^/EXTERNAL_BUILD=1\n/' owrt-qti-conf/qmb415.mk;
-	set_sectools_path || return
 	if [ -d $TOPDIR/../prebuilt_HY11 ]; then
 		sed -i '1s/^/EXTERNAL_VARIANT=HY11\n/' include/package.mk;
 	fi
@@ -65,6 +78,7 @@ else
 	mkdir -p $TOPDIR/../prebuilt_HY11;
 	mkdir -p $TOPDIR/../prebuilt_HY22;
 fi
+set_sectools_path || return
 
 function uname_version(){
 	KERNEL_VERSION=5.15
@@ -388,19 +402,71 @@ function build_kernel(){
 	cd $TOPDIR
 }
 
+# arguments: sdx_target
+# Sets QC_PROFILE_DIR based on PRPL major version and target, then (re)exports
+# GENCONFIG_PROFILE_DIRS so gen_config.py picks up the right profile dir.
+#   QC_PROFILE_DIR  -> ${TOPDIR}/owrt-qti-conf/P<major>/<target>
+function set_genconfig_profile_dirs(){
+
+    if [ -z "${1}" ]; then
+        echo "ERROR: Please provide target to set QC_PROFILE_DIR" && return 1
+    fi
+
+    if [ -n "${PRPL_VERSION}" ]; then
+        if [ -z "${PRPL_MAJOR_VERSION}" ]; then
+            echo "ERROR: PRPL_MAJOR_VERSION is empty, cannot construct QC_PROFILE_DIR" && return 1
+        fi
+        export QC_PROFILE_DIR="${TOPDIR}/owrt-qti-conf/P${PRPL_MAJOR_VERSION}/${1}"
+        if [ ! -d "${QC_PROFILE_DIR}" ]; then
+            echo "WARNING: Profile Dir: ${QC_PROFILE_DIR} not found, skipping QC profile dir"
+            QC_PROFILE_DIR=""
+        fi
+    fi
+
+	# append profile dirs paths to GENCONFIG_PROFILE_DIRS and seperate each path with ":" similar to $PATH
+	# if GENCONFIG_PROFILE_DIRS was not configured then;
+	# GENCONFIG_PROFILE_DIRS = "${TOPDIR}/profiles:${TOPDIR}/owrt-qti-conf/P<major>/<target>"
+	# but if GENCONFIG_PROFILE_DIRS was already configured we will do:
+	# GENCONFIG_PROFILE_DIRS = "${TOPDIR}/profiles:${GENCONFIG_PROFILE_DIRS}:${TOPDIR}/owrt-qti-conf/P<major>/<target>"
+	# avoid duplicate paths in GENCONFIG_PROFILE_DIRS
+
+    if [ -n "${GENCONFIG_PROFILE_DIRS}" ]; then
+        _add_prpl=1
+        _add_qc=1
+        [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${PRPLWRT_PROFILE_DIR}:"* ]] && _add_prpl=0
+        [ -n "${QC_PROFILE_DIR}" ] && [[ ":${GENCONFIG_PROFILE_DIRS}:" == *":${QC_PROFILE_DIR}:"* ]] && _add_qc=0
+        [ "${_add_prpl}" == "1" ] && export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${GENCONFIG_PROFILE_DIRS}"
+        [ "${_add_qc}" == "1" ] && [ -n "${QC_PROFILE_DIR}" ] && export GENCONFIG_PROFILE_DIRS="${GENCONFIG_PROFILE_DIRS}:${QC_PROFILE_DIR}"
+    else
+        if [ -n "${QC_PROFILE_DIR}" ]; then
+            export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}:${QC_PROFILE_DIR}"
+        else
+            export GENCONFIG_PROFILE_DIRS="${PRPLWRT_PROFILE_DIR}"
+        fi
+    fi
+}
+
+# arguments:
+#	${1} = target eg: sdx85,echo, etc.
+#	${2} = profile eg: cpe,perf etc.
 function run_gen_config(){
-	# Do not run gen_config for recovery and initramfs profile
-	if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
-		if [ -f "profiles/${1}_${2}.yml" ]; then
-			./scripts/gen_config.py ${1}_${2} prpl cellular || return
+	# run gen_config for all profiles
+	# SDX profiles to be passed as FINAL argument to gen_config.py to allow for CONFIG OVERRIDING.
+	# set_genconfig_profile_dirs to set QC_PROFILE_DIR as owrt-qti-conf/P<major>/<target>
+
+	set_genconfig_profile_dirs ${1} || return 1
+
+	if [ -f "${QC_PROFILE_DIR}/${1}_${2}.yml" ]; then
+		if [ "${2}" != "recovery" ] && [ "${2}" != "initramfs" ]; then
+			./scripts/gen_config.py prpl cellular ${1}_${2} || return
 			rm -rf .feeds_state.json
 		else
-			./scripts/gen_config.py prpl cellular || return
+			./scripts/gen_config.py ${1}_${2} || return
 		fi
 	else
-		if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
-        		./scripts/gen_config.py ${1}_${2} || return
-        	fi
+		echo "profile for ${1}_${2} is not found"
+		echo "Building with generic prpl profiles"
+		./scripts/gen_config.py prpl cellular || return
 	fi
 }
 
@@ -528,8 +594,11 @@ function configure(){
 			if [ "${2}" = "cpe" ]; then
 				TARGET=sdxpinn-cpe-wkk
 			fi
-			if [ "${2}" = "cpe-v1" ] || [ "${2}" = "cpe-v1-min" ]; then
+			if [ "${2}" = "cpe-v1" ]; then
 				TARGET=sdxpinn-cpe-wkk-v1
+			fi
+			if [ "${2}" = "cpe-v1-min" ]; then
+				TARGET=sdxpinn-cpe-wkk-min
 			fi
 			if [ "${2}" = "mbb-512" ]; then
 				TARGET=sdxpinn-512
