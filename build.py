@@ -142,6 +142,7 @@ parser.add_argument('--variant', default='debug', help='Please specify the varia
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
 parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
 parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
+parser.add_argument('--skip-recovery', action='store_true', help='Skip building the recovery profile; default: recovery is built')
 
 def validate_nthreads(value):
     try:
@@ -470,6 +471,12 @@ def build(profile):
                 exit(1)
         exit(1)
 
+def build_recovery():
+    if args.skip_recovery:
+        print("--skip-recovery passed, skipping recovery build.")
+        return
+    build('recovery')
+
 def build_kw(profile):
     configure(args.target, profile, args.variant)
     if profile == 'mbb':
@@ -587,7 +594,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
 #       common build sequence for sdx75/sdx85 profiles
       make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
       consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
-      build('recovery')  # configure & build recovery profile
+      build_recovery()  # configure & build recovery profile
       if prpl_version:
        if args.target == 'sdx85':
           build('initramfs')
@@ -597,7 +604,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
    #automation
        if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-min' or args.profile == 'cpe-v1' or args.profile == 'cpe-v1-min' or args.profile == 'mbb-512' or args.profile == 'iot':
           set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-          build('recovery')
+          build_recovery()
        else:
            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
