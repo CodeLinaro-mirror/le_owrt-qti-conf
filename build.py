@@ -443,7 +443,7 @@ def build(profile):
     if filer_path:
         set_config_option('CONFIG_LOCALMIRROR', 'file://{}'.format(filer_path))
 
-    if args.automation == 'true' and profile == 'mbb':
+    if args.automation == 'true' and profile in ('mbb', 'iot'):
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
         subprocess.run(['make', 'package/telux-lib/clean', 'package/telux-lib/compile'])
     try:
@@ -472,7 +472,7 @@ def build(profile):
 
 def build_kw(profile):
     configure(args.target, profile, args.variant)
-    if profile == 'mbb':
+    if profile in ('mbb', 'iot'):
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
     try:
         subprocess.run(['make', '-j', str(args.nthreads)], check=True)
