@@ -9,6 +9,62 @@ import sys
 import subprocess
 import time
 import re
+import json
+import ssl
+import urllib.request
+import urllib.parse
+import urllib.error
+
+# Returns the NFS/filer mount path for the given SI branch, site, and
+# server type from the AIM API.  Returns None on any error to skip 
+# optional config injection gracefully.
+def get_filer_path(manifest_branch, site, server_type):
+    """Query the AIM API and return the filer path for the given branch, site, and server type."""
+    BASE_URL = "https://aim.qualcomm.com/api/v1/get_oe_filer_paths/"
+
+    params = {
+        "manifest_branch": manifest_branch,
+        "site": site,
+        "is_active": 1,
+        "server_type": server_type
+    }
+
+    url = "{}?{}".format(BASE_URL, urllib.parse.urlencode(params))
+
+    headers = {
+        "Accept": "application/json",
+    }
+
+    # Equivalent to requests' verify=False
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as response:
+            data = json.loads(response.read().decode())
+
+        if not data:
+            print(f"No results returned for site={site}, server_type={server_type}.")
+            return None
+
+        return data[0].get("filer")
+
+    except urllib.error.HTTPError as e:
+        print(f"? HTTP Error: {e}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"? Connection Error: Could not reach the server. {e}")
+        return None
+    except TimeoutError:
+        print("? Request timed out.")
+        return None
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"? Unexpected error: {e}")
+        return None
+
 
 def get_owrt_root_path():
     """Get the path to the OpenWrt build system's root directory."""
@@ -22,9 +78,61 @@ def get_owrt_root_path():
     owrt_root_path = os.path.abspath(os.path.join(parent_directory, os.pardir))
     return owrt_root_path
 
+
+# Reads the repo manifest git config to determine the SI (software image)
+# branch name.  Handles two formats:
+#   - Normal branch:  refs/heads/PRPL.PRODUCT.2.0  ? PRPL.PRODUCT.2.0
+#   - AU release tag: AU_LINUX_EMBEDDED_PRPL.PRODUCT.2.0_TARGET_ALL.x.y.z
+#                     ? PRPL.PRODUCT.2.0 (text between AU_LINUX_EMBEDDED_
+#                        and _TARGET_ALL)
+# Falls back to the raw string if neither pattern matches.
+def get_si_name(repo_root="."):
+    manifest_git = os.path.join(repo_root, ".repo", "manifests.git", "config")
+    result = subprocess.run(
+        ["git", "config", "--file", manifest_git, "branch.default.merge"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return None
+    raw = result.stdout.strip()
+    if not raw:
+        return None
+    # e.g. refs/tags/AU_LINUX_EMBEDDED_PRPL.PRODUCT.2.0_TARGET_ALL.01.732.201
+
+    # Case 1: Normal branch ? refs/heads/PRPL.PRODUCT.2.0
+    if "refs/heads/" in raw:
+        return raw.replace("refs/heads/", "")
+
+    # Case 2: AU tag ? extract branch name between AU_LINUX_EMBEDDED_ and _TARGET_ALL
+    match = re.search(r'AU_LINUX_EMBEDDED_(.+?)_TARGET_ALL', raw)
+    if match:
+        return match.group(1)  # ? PRPL.PRODUCT.2.0
+
+    # Fallback: return raw value
+    return None
+
 TOPDIR = get_owrt_root_path()
 # Change the current working directory to the OpenWrt root path
 os.chdir(TOPDIR)
+
+# Resolve the SI (software image) name from the repo manifest; used as the
+# branch key when querying the AIM filer API.
+si_name = get_si_name(os.path.join(TOPDIR, ".."))
+if si_name:
+    print(f"SI Name: {si_name}")
+
+# Query AIM for the downloads filer path (LasVegas site).  When available,
+# this is written to CONFIG_LOCALMIRROR so sources tar are fetched from the
+# local mirror instead of the internet.
+filer_path = get_filer_path(si_name, site="lasvegas", server_type="DOWNLOADS") if si_name else None
+if filer_path:
+    print(f"Filer Path: {filer_path}")
+
+# Query AIM for the ccache filer path (Las Vegas site).  When available,
+# this is used as secondary filer path for ccache.
+ccache_filer_path = get_filer_path(si_name, site="lasvegas", server_type="CCACHES") if si_name else None
+if ccache_filer_path:
+    print(f"CCache Filer Path: {ccache_filer_path}")
 
 # Parse the command-line arguments, assign default value for target, profile, variant, automation, sectools_path
 parser = argparse.ArgumentParser()
@@ -34,6 +142,7 @@ parser.add_argument('--variant', default='debug', help='Please specify the varia
 parser.add_argument('--automation', default='false', help='Please specify if automation build or local build; default --automation=false')
 parser.add_argument('--sectools_path', default=None, help='Please specify sectools path.')
 parser.add_argument('--kw', default='false', help='Please specify if kw build or not; default --kw=false')
+parser.add_argument('--skip-recovery', action='store_true', help='Skip building the recovery profile; default: recovery is built')
 
 def validate_nthreads(value):
     try:
@@ -252,6 +361,32 @@ def print_build_configuration(target, profile, variant):
     print('#' * 42)
     time.sleep(2)
 
+# Writes key="value" into owrt/.config, replacing an existing assignment
+# or an "# key is not set" comment if present, otherwise appending.
+# Called after configure() so the injected values are not overwritten by
+# the defconfig step inside configure.
+def set_config_option(key, value):
+    config_path = os.path.join(TOPDIR, '.config')
+    if not os.path.exists(config_path):
+        return
+    with open(config_path, 'r') as f:
+        lines = f.readlines()
+    new_line = '{}="{}"\n'.format(key, value)
+    found = False
+    new_lines = []
+    for line in lines:
+        if line.startswith('{}='.format(key)) or line.strip() == '# {} is not set'.format(key):
+            if not found:
+                new_lines.append(new_line)
+                found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(new_line)
+    with open(config_path, 'w') as f:
+        f.writelines(new_lines)
+
+
 # further modularize configure & build calls
 # configure for args.target, profile, args.variant
 # run full build "make -jnthreads"
@@ -262,8 +397,53 @@ def print_build_configuration(target, profile, variant):
 # If automation build (automation flag set as true)
 #   Re-trigger full build with make -j1 V=s for more verbose logs on the error
 
+# Setup secondary path for ccache
+# Local path is based on CONFIG_CCACHE_DIR 
+# if not set, it defaults to .ccache folder in TOPDIR
+def setup_ccache():
+    config_file_path = '{}/.config'.format(TOPDIR)
+    ccache_dir = None
+    ccache_enabled = False
+
+    try:
+        with open(config_file_path, 'r') as f:
+            for line in f:
+                if re.match(r'^CONFIG_CCACHE=y', line):
+                    ccache_enabled = True
+                match = re.match(r'^CONFIG_CCACHE_DIR="(.+)"', line)
+                if match:
+                    ccache_dir = match.group(1)
+    except FileNotFoundError:
+        return
+
+    if not ccache_enabled:
+        return
+
+    if not ccache_dir:
+        ccache_dir = os.path.join(TOPDIR, '.ccache')
+
+    os.makedirs(ccache_dir, exist_ok=True)
+    ccache_conf = os.path.join(ccache_dir, 'ccache.conf')
+    # Only add a secondary_storage path when AIM actually resolved one for
+    # current SI. If the SI has no ccache filer path configured 
+    # (or the lookup failed), remove any stale ccache.conf from a prior run .
+    if not ccache_filer_path:
+        if os.path.exists(ccache_conf):
+            os.remove(ccache_conf)
+        return
+
+    with open(ccache_conf, 'w') as f:
+        f.write('secondary_storage = file://{}|read-only=true\n'.format(ccache_filer_path))
+    print('ccache.conf updated at: {}'.format(ccache_conf))
+
 def build(profile):
     configure(args.target, profile, args.variant)
+    setup_ccache()
+    # Inject filer path into .config after configure so it survives defconfig
+    # resets
+    if filer_path:
+        set_config_option('CONFIG_LOCALMIRROR', 'file://{}'.format(filer_path))
+
     if args.automation == 'true' and profile == 'mbb':
         subprocess.run(['make', 'package/sign_abl/clean', 'package/sign_abl/compile'], check=True)
         subprocess.run(['make', 'package/telux-lib/clean', 'package/telux-lib/compile'])
@@ -290,6 +470,12 @@ def build(profile):
             except subprocess.CalledProcessError:
                 exit(1)
         exit(1)
+
+def build_recovery():
+    if args.skip_recovery:
+        print("--skip-recovery passed, skipping recovery build.")
+        return
+    build('recovery')
 
 def build_kw(profile):
     configure(args.target, profile, args.variant)
@@ -345,8 +531,10 @@ def getKernelPlatform(target, profile):
             platform = 'sdxpinn'
         elif profile == 'cpe':
             platform = 'sdxpinn-cpe-wkk'
-        elif profile == 'cpe-v1' or profile == 'cpe-v1-min':
+        elif profile == 'cpe-v1':
             platform = 'sdxpinn-cpe-wkk-v1'
+        elif profile == 'cpe-v1-min':
+            platform = 'sdxpinn-cpe-wkk-min'
         elif profile == 'mbb-512':
             platform = 'sdxpinn-512'
         else:
@@ -380,6 +568,11 @@ def getKernelPlatform(target, profile):
     return platform
 
 prpl_version = get_prpl_version()
+
+# Enable verbose gen_config.py logging only for Prplos builds run
+if prpl_version and args.logging == 'true':
+    os.environ['GENCONFIG_VERBOSE'] = '1'
+
 print_build_configuration(args.target, args.profile, args.variant)
 
 current_build_timestamp=int(time.time())
@@ -401,7 +594,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
 #       common build sequence for sdx75/sdx85 profiles
       make_clean(args.target) # only in incremental builds that involve at least one different configuration parameter (profile or variant)
       consume_kernel_artifacts()  # only in incremental builds, no op on fresh sync / distclean state
-      build('recovery')  # configure & build recovery profile
+      build_recovery()  # configure & build recovery profile
       if prpl_version:
        if args.target == 'sdx85':
           build('initramfs')
@@ -411,7 +604,7 @@ if args.target == 'sdx75' or args.target == 'sdx85':
    #automation
        if args.profile == 'mbb' or args.profile == 'cpe' or args.profile == 'cpe-tarang' or args.profile == 'cpe-min' or args.profile == 'cpe-v1' or args.profile == 'cpe-v1-min' or args.profile == 'mbb-512' or args.profile == 'iot':
           set_kernel_target(args.target, platform, args.variant)  # set kernel target for configured platform
-          build('recovery')
+          build_recovery()
        else:
            print("Invalid profile '{}' for target '{}'".format(args.profile, args.target))
            print("Valid profiles for '{}' target are: {}".format(args.target, ', '.join(valid_profiles[args.target])))
