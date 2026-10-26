@@ -60,3 +60,4 @@ diffconfig: |
   CONFIG_VERSION_MANUFACTURER_URL="https://prplfoundation.org"
   CONFIG_VERSION_BUG_URL="https://jira.prplfoundation.org"
   CONFIG_VERSION_SUPPORT_URL="https://jira.prplfoundation.org"
+  CONFIG_CCACHE=y

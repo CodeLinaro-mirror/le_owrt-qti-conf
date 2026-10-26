@@ -522,6 +522,15 @@ function configure(){
 	done
 
 	feeds_conf_path ${1} ${2} || return 1
+
+	# recovery/initramfs don't need router-only default packages (e.g. odhcp6c, odhcpd-ipv6only)
+	# must be exported before run_gen_config/gen_config.py, which runs its own 'make defconfig'
+	if [ "${2}" == "recovery" ] || [ "${2}" == "initramfs" ]; then
+		export DEVICE_TYPE=basic
+	else
+		unset DEVICE_TYPE
+	fi
+
 	if [ -n "${PRPL_VERSION}" ]; then
 		run_gen_config ${1} ${2} || return
 		set_up_feeds_prpl ${1} ${2} || return 1
