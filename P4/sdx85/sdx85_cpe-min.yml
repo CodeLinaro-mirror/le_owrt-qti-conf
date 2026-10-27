@@ -67,9 +67,66 @@ packages:
   - resize2fs
   - recovery-std
   - updater-std
-  - crash-collect-hlos
-  - log-collector
   - fdt-utils
+
+packages_remove:
+  - tr181-periodicfileupload
+  - tr181-bulkdata
+  - oopsmonitor
+  - amx-faultmonitor
+  - reboot-service
+  - tr181-led
+  - tr181-button
+  - tr181-flashmonitor
+  - multisettings
+  - ssh-server
+  - security-tests
+  - kmod-sat_module
+  - dropbear
+  - avahi-nodbus-daemon 
+  #Start of LCM packages
+  - cthulhu
+  - cthulhu-dhcpc
+  - cthulhu-lxc
+  - cthulhu-capabilities
+  - cthulhu-networking
+  - cthulhu-plugin-usp
+  - lxc
+  - lxc-attach
+  - lxc-auto
+  - lxc-autostart
+  - lxc-cgroup
+  - lxc-checkconfig
+  - lxc-common
+  - lxc-config
+  - lxc-configs
+  - lxc-console
+  - lxc-copy
+  - lxc-create
+  - lxc-destroy
+  - lxc-device
+  - lxc-execute
+  - lxc-freeze
+  - lxc-hooks
+  - lxc-info
+  - lxc-ls
+  - lxc-monitor
+  - lxc-start
+  - lxc-stop
+  - lxc-templates
+  - lxc-top
+  - lxc-unfreeze
+  - lxc-unprivileged
+  - lxc-unshare
+  - lxc-user-nic
+  - lxc-usernsexec
+  - lxc-wait
+  - packet-interception
+  - rlyeh
+  - timingila
+  - timingila-cthulhu
+  - timingila-rlyeh
+  #End of LCM packages
 
 diffconfig: |
   CONFIG_TARGET_ROOTFS_UBIFS=y
@@ -165,3 +222,6 @@ diffconfig: |
   #CONFIG_PACKAGE_ATH_DEBUG=y
   CONFIG_PREINITOPT=y
   CONFIG_TARGET_PREINIT_DISABLE_FAILSAFE=y
+  CONFIG_CCACHE=y
+  #lcm
+  CONFIG_SAH_SERVICES_TIMINGILA_INIT_ADAPTERS=n
